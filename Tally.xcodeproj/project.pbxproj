@@ -9,12 +9,24 @@
 /* Begin PBXBuildFile section */
 		A10000000000000000000001 /* TallyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* TallyApp.swift */; };
 		A10000000000000000000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000002 /* ContentView.swift */; };
+		EECDC705309CF0D10007B33C /* MacroEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = EECDC704309CF0D10007B33C /* MacroEntry.swift */; };
+		EECDC707309CF0D60007B33C /* MacroGoal.swift in Sources */ = {isa = PBXBuildFile; fileRef = EECDC706309CF0D60007B33C /* MacroGoal.swift */; };
+		EECDC709309CF0DC0007B33C /* MacroTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = EECDC708309CF0DC0007B33C /* MacroTheme.swift */; };
+		EECDC70B309CF0EE0007B33C /* AddEditEntryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EECDC70A309CF0EE0007B33C /* AddEditEntryView.swift */; };
+		EECDC70D309CF0FB0007B33C /* GoalsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EECDC70C309CF0FB0007B33C /* GoalsView.swift */; };
+		EECDC70F309CF10C0007B33C /* MacroProgressViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = EECDC70E309CF10C0007B33C /* MacroProgressViews.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		A20000000000000000000001 /* TallyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TallyApp.swift; sourceTree = "<group>"; };
 		A20000000000000000000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		A20000000000000000000003 /* Tally.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Tally.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		EECDC704309CF0D10007B33C /* MacroEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacroEntry.swift; sourceTree = "<group>"; };
+		EECDC706309CF0D60007B33C /* MacroGoal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacroGoal.swift; sourceTree = "<group>"; };
+		EECDC708309CF0DC0007B33C /* MacroTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacroTheme.swift; sourceTree = "<group>"; };
+		EECDC70A309CF0EE0007B33C /* AddEditEntryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddEditEntryView.swift; sourceTree = "<group>"; };
+		EECDC70C309CF0FB0007B33C /* GoalsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoalsView.swift; sourceTree = "<group>"; };
+		EECDC70E309CF10C0007B33C /* MacroProgressViews.swift */ = {isa = PBXFileReference; path = MacroProgressViews.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -41,6 +53,12 @@
 			children = (
 				A20000000000000000000001 /* TallyApp.swift */,
 				A20000000000000000000002 /* ContentView.swift */,
+				EECDC704309CF0D10007B33C /* MacroEntry.swift */,
+				EECDC706309CF0D60007B33C /* MacroGoal.swift */,
+				EECDC708309CF0DC0007B33C /* MacroTheme.swift */,
+				EECDC70A309CF0EE0007B33C /* AddEditEntryView.swift */,
+				EECDC70C309CF0FB0007B33C /* GoalsView.swift */,
+				EECDC70E309CF10C0007B33C /* MacroProgressViews.swift */,
 			);
 			path = Tally;
 			sourceTree = "<group>";
@@ -120,8 +138,14 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				EECDC70F309CF10C0007B33C /* MacroProgressViews.swift in Sources */,
 				A10000000000000000000001 /* TallyApp.swift in Sources */,
+				EECDC705309CF0D10007B33C /* MacroEntry.swift in Sources */,
+				EECDC709309CF0DC0007B33C /* MacroTheme.swift in Sources */,
+				EECDC70B309CF0EE0007B33C /* AddEditEntryView.swift in Sources */,
+				EECDC70D309CF0FB0007B33C /* GoalsView.swift in Sources */,
 				A10000000000000000000002 /* ContentView.swift in Sources */,
+				EECDC707309CF0D60007B33C /* MacroGoal.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

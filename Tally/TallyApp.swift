@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 @main
 struct TallyApp: App {
@@ -6,5 +7,6 @@ struct TallyApp: App {
         WindowGroup {
             ContentView()
         }
+        .modelContainer(for: [MacroEntry.self, MacroGoal.self])
     }
 }
