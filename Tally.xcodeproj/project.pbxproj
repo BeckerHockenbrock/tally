@@ -3,34 +3,78 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 56;
+	objectVersion = 70;
 	objects = {
+
+/* Begin PBXContainerItemProxy section */
+        A90000000000000000000001 = {
+            isa = PBXContainerItemProxy;
+            containerPortal = A50000000000000000000001;
+            proxyType = 1;
+            remoteGlobalIDString = A40000000000000000000001;
+            remoteInfo = Tally;
+        };
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXTargetDependency section */
+        A90000000000000000000002 = {
+            isa = PBXTargetDependency;
+            target = A40000000000000000000001;
+            targetProxy = A90000000000000000000001;
+        };
+/* End PBXTargetDependency section */
 
 /* Begin PBXBuildFile section */
 		A10000000000000000000001 /* TallyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* TallyApp.swift */; };
 		A10000000000000000000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000002 /* ContentView.swift */; };
+		EE69AA5130A3A03E00808EE6 /* BARCODE_SETUP.md in Resources */ = {isa = PBXBuildFile; fileRef = EE69AA5030A3A03E00808EE6 /* BARCODE_SETUP.md */; };
 		EECDC705309CF0D10007B33C /* MacroEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = EECDC704309CF0D10007B33C /* MacroEntry.swift */; };
 		EECDC707309CF0D60007B33C /* MacroGoal.swift in Sources */ = {isa = PBXBuildFile; fileRef = EECDC706309CF0D60007B33C /* MacroGoal.swift */; };
 		EECDC709309CF0DC0007B33C /* MacroTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = EECDC708309CF0DC0007B33C /* MacroTheme.swift */; };
 		EECDC70B309CF0EE0007B33C /* AddEditEntryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EECDC70A309CF0EE0007B33C /* AddEditEntryView.swift */; };
 		EECDC70D309CF0FB0007B33C /* GoalsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EECDC70C309CF0FB0007B33C /* GoalsView.swift */; };
 		EECDC70F309CF10C0007B33C /* MacroProgressViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = EECDC70E309CF10C0007B33C /* MacroProgressViews.swift */; };
+		EECDC711309D39510007B33C /* Food.swift in Sources */ = {isa = PBXBuildFile; fileRef = EECDC710309D39510007B33C /* Food.swift */; };
+		EECDC713309D39520007B33C /* FoodAPIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EECDC712309D39520007B33C /* FoodAPIService.swift */; };
+		EECDC715309D397E0007B33C /* SavedFood.swift in Sources */ = {isa = PBXBuildFile; fileRef = EECDC714309D397E0007B33C /* SavedFood.swift */; };
+		EECDC717309D397F0007B33C /* BarcodeScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EECDC716309D397F0007B33C /* BarcodeScannerView.swift */; };
+		EECDC719309D39B90007B33C /* FoodDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EECDC718309D39B90007B33C /* FoodDetailView.swift */; };
+		EECDC71B309D39B90007B33C /* FoodEntryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EECDC71A309D39B90007B33C /* FoodEntryView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		A20000000000000000000001 /* TallyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TallyApp.swift; sourceTree = "<group>"; };
 		A20000000000000000000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		A20000000000000000000003 /* Tally.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Tally.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		EE69AA5030A3A03E00808EE6 /* BARCODE_SETUP.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = BARCODE_SETUP.md; sourceTree = "<group>"; };
 		EECDC704309CF0D10007B33C /* MacroEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacroEntry.swift; sourceTree = "<group>"; };
 		EECDC706309CF0D60007B33C /* MacroGoal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacroGoal.swift; sourceTree = "<group>"; };
 		EECDC708309CF0DC0007B33C /* MacroTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacroTheme.swift; sourceTree = "<group>"; };
 		EECDC70A309CF0EE0007B33C /* AddEditEntryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddEditEntryView.swift; sourceTree = "<group>"; };
 		EECDC70C309CF0FB0007B33C /* GoalsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoalsView.swift; sourceTree = "<group>"; };
-		EECDC70E309CF10C0007B33C /* MacroProgressViews.swift */ = {isa = PBXFileReference; path = MacroProgressViews.swift; sourceTree = "<group>"; };
+		EECDC70E309CF10C0007B33C /* MacroProgressViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacroProgressViews.swift; sourceTree = "<group>"; };
+		EECDC710309D39510007B33C /* Food.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Food.swift; sourceTree = "<group>"; };
+		EECDC712309D39520007B33C /* FoodAPIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoodAPIService.swift; sourceTree = "<group>"; };
+		EECDC714309D397E0007B33C /* SavedFood.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedFood.swift; sourceTree = "<group>"; };
+		EECDC716309D397F0007B33C /* BarcodeScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarcodeScannerView.swift; sourceTree = "<group>"; };
+		EECDC718309D39B90007B33C /* FoodDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoodDetailView.swift; sourceTree = "<group>"; };
+		EECDC71A309D39B90007B33C /* FoodEntryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoodEntryView.swift; sourceTree = "<group>"; };
+		EECDC720309D39EA0007B33C /* TallyTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TallyTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		EECDC721309D39EB0007B33C /* TallyTests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = TallyTests; sourceTree = "<group>"; };
+/* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		A60000000000000000000002 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		EECDC71D309D39EA0007B33C /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -44,6 +88,8 @@
 			isa = PBXGroup;
 			children = (
 				A30000000000000000000002 /* Tally */,
+				EECDC721309D39EB0007B33C /* TallyTests */,
+				EE69AA5030A3A03E00808EE6 /* BARCODE_SETUP.md */,
 				A30000000000000000000003 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -59,6 +105,12 @@
 				EECDC70A309CF0EE0007B33C /* AddEditEntryView.swift */,
 				EECDC70C309CF0FB0007B33C /* GoalsView.swift */,
 				EECDC70E309CF10C0007B33C /* MacroProgressViews.swift */,
+				EECDC710309D39510007B33C /* Food.swift */,
+				EECDC712309D39520007B33C /* FoodAPIService.swift */,
+				EECDC714309D397E0007B33C /* SavedFood.swift */,
+				EECDC716309D397F0007B33C /* BarcodeScannerView.swift */,
+				EECDC718309D39B90007B33C /* FoodDetailView.swift */,
+				EECDC71A309D39B90007B33C /* FoodEntryView.swift */,
 			);
 			path = Tally;
 			sourceTree = "<group>";
@@ -67,6 +119,7 @@
 			isa = PBXGroup;
 			children = (
 				A20000000000000000000003 /* Tally.app */,
+				EECDC720309D39EA0007B33C /* TallyTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -91,6 +144,29 @@
 			productReference = A20000000000000000000003 /* Tally.app */;
 			productType = "com.apple.product-type.application";
 		};
+		EECDC71F309D39EA0007B33C /* TallyTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = EECDC724309D39EB0007B33C /* Build configuration list for PBXNativeTarget "TallyTests" */;
+			buildPhases = (
+				EECDC71C309D39EA0007B33C /* Sources */,
+				EECDC71D309D39EA0007B33C /* Frameworks */,
+				EECDC71E309D39EA0007B33C /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+                A90000000000000000000002,
+			);
+			fileSystemSynchronizedGroups = (
+				EECDC721309D39EB0007B33C /* TallyTests */,
+			);
+			name = TallyTests;
+			packageProductDependencies = (
+			);
+			productName = TallyTests;
+			productReference = EECDC720309D39EA0007B33C /* TallyTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -98,10 +174,14 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
+				LastSwiftUpdateCheck = 2720;
 				LastUpgradeCheck = 2720;
 				TargetAttributes = {
 					A40000000000000000000001 = {
 						CreatedOnToolsVersion = 16.0;
+					};
+					EECDC71F309D39EA0007B33C = {
+						CreatedOnToolsVersion = 27.2;
 					};
 				};
 			};
@@ -119,6 +199,7 @@
 			projectRoot = "";
 			targets = (
 				A40000000000000000000001 /* Tally */,
+				EECDC71F309D39EA0007B33C /* TallyTests */,
 			);
 		};
 /* End PBXProject section */
@@ -131,6 +212,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		EECDC71E309D39EA0007B33C /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				EE69AA5130A3A03E00808EE6 /* BARCODE_SETUP.md in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -138,14 +227,27 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				EECDC717309D397F0007B33C /* BarcodeScannerView.swift in Sources */,
 				EECDC70F309CF10C0007B33C /* MacroProgressViews.swift in Sources */,
 				A10000000000000000000001 /* TallyApp.swift in Sources */,
+				EECDC71B309D39B90007B33C /* FoodEntryView.swift in Sources */,
+				EECDC715309D397E0007B33C /* SavedFood.swift in Sources */,
 				EECDC705309CF0D10007B33C /* MacroEntry.swift in Sources */,
 				EECDC709309CF0DC0007B33C /* MacroTheme.swift in Sources */,
 				EECDC70B309CF0EE0007B33C /* AddEditEntryView.swift in Sources */,
+				EECDC711309D39510007B33C /* Food.swift in Sources */,
 				EECDC70D309CF0FB0007B33C /* GoalsView.swift in Sources */,
 				A10000000000000000000002 /* ContentView.swift in Sources */,
+				EECDC719309D39B90007B33C /* FoodDetailView.swift in Sources */,
+				EECDC713309D39520007B33C /* FoodAPIService.swift in Sources */,
 				EECDC707309CF0D60007B33C /* MacroGoal.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		EECDC71C309D39EA0007B33C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -235,11 +337,14 @@
 				CLANG_ENABLE_OBJC_WEAK = YES;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = Y239MGN46D;
+				ENABLE_DEBUG_DYLIB = NO;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Tally uses the camera to scan food barcodes and look up nutrition information.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.tally;
+				PRODUCT_BUNDLE_IDENTIFIER = com.tally.BeckerHockenbrock;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -254,16 +359,116 @@
 				CLANG_ENABLE_OBJC_WEAK = YES;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = Y239MGN46D;
+				ENABLE_DEBUG_DYLIB = NO;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Tally uses the camera to scan food barcodes and look up nutrition information.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.tally;
+				PRODUCT_BUNDLE_IDENTIFIER = com.tally.BeckerHockenbrock;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		EECDC725309D39EB0007B33C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 27.2;
+				MARKETING_VERSION = 1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.yourcompany.TallyTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Tally.app/Tally";
+				XROS_DEPLOYMENT_TARGET = 27.2;
+			};
+			name = Debug;
+		};
+		EECDC726309D39EB0007B33C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 27.2;
+				MARKETING_VERSION = 1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.yourcompany.TallyTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Tally.app/Tally";
+				XROS_DEPLOYMENT_TARGET = 27.2;
 			};
 			name = Release;
 		};
@@ -284,6 +489,15 @@
 			buildConfigurations = (
 				A70000000000000000000003 /* Debug */,
 				A70000000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		EECDC724309D39EB0007B33C /* Build configuration list for PBXNativeTarget "TallyTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				EECDC725309D39EB0007B33C /* Debug */,
+				EECDC726309D39EB0007B33C /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

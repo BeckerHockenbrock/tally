@@ -7,6 +7,6 @@ struct TallyApp: App {
         WindowGroup {
             ContentView()
         }
-        .modelContainer(for: [MacroEntry.self, MacroGoal.self])
+        .modelContainer(for: [MacroEntry.self, MacroGoal.self, SavedFood.self])
     }
 }

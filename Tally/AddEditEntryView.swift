@@ -7,6 +7,12 @@ struct AddEditEntryView: View {
     
     var entryToEdit: MacroEntry?
     var initialDate: Date
+    var initialBarcode: String?
+    var initialName: String
+    var onSaved: (() -> Void)?
+    @State private var caloriesText = ""
+    @State private var saveError: String?
+    @State private var initialized = false
     
     @State private var name: String = ""
     @State private var proteinText: String = ""
@@ -20,9 +26,13 @@ struct AddEditEntryView: View {
         case name, protein, carbs, fat
     }
     
-    init(entryToEdit: MacroEntry? = nil, initialDate: Date = Date()) {
+    init(entryToEdit: MacroEntry? = nil, initialDate: Date = Date(), initialBarcode: String? = nil,
+         initialName: String = "", onSaved: (() -> Void)? = nil) {
         self.entryToEdit = entryToEdit
         self.initialDate = initialDate
+        self.initialBarcode = initialBarcode
+        self.initialName = initialName
+        self.onSaved = onSaved
     }
     
     private var proteinValue: Double {
@@ -42,7 +52,16 @@ struct AddEditEntryView: View {
     }
     
     private var isFormValid: Bool {
-        proteinValue > 0 || carbsValue > 0 || fatValue > 0
+        let macros = [proteinText, carbsText, fatText]
+        let valid = macros.allSatisfy { text in
+            text.isEmpty || (Double(text.replacingOccurrences(of: ",", with: ".")).map { $0.isFinite && $0 >= 0 && $0 <= 100_000 } ?? false)
+        }
+        let energyValid = caloriesText.isEmpty || (Double(caloriesText.replacingOccurrences(of: ",", with: ".")).map {
+            $0.isFinite && $0 >= 0 && $0 <= 1_000_000
+        } ?? false)
+        // Barcode fallback requires explicit values, including explicit zeros.
+        let explicit = (initialBarcode == nil || macros.allSatisfy { !$0.isEmpty })
+        return valid && energyValid && explicit && (proteinValue > 0 || carbsValue > 0 || fatValue > 0 || !caloriesText.isEmpty)
     }
     
     var body: some View {
@@ -171,9 +190,22 @@ struct AddEditEntryView: View {
                     }
                     .padding(.vertical, 4)
                 } header: {
-                    Text("Calculated Energy")
+                    Text("Estimated Energy from Macros")
                 }
                 
+                Section {
+                    TextField("Calories from label (optional)", text: $caloriesText)
+                        .keyboardType(.decimalPad)
+                    if let barcode = entryToEdit?.barcode ?? initialBarcode {
+                        LabeledContent("Barcode", value: barcode)
+                    }
+                    if let portion = entryToEdit?.portionDescription {
+                        LabeledContent("Logged portion", value: portion)
+                    }
+                } footer: {
+                    Text("Label calories override the macro estimate. When editing nutrition, update calories too or clear this field to use the estimate. For a scanned food, enter every macro, including zero.")
+                }
+
                 if entryToEdit != nil {
                     Section {
                         Button(role: .destructive) {
@@ -220,7 +252,12 @@ struct AddEditEntryView: View {
                 Button("Delete", role: .destructive) {
                     if let entry = entryToEdit {
                         modelContext.delete(entry)
-                        try? modelContext.save()
+                        do { try modelContext.save() }
+                        catch {
+                            modelContext.rollback()
+                            saveError = error.localizedDescription
+                            return
+                        }
                     }
                     dismiss()
                 }
@@ -229,25 +266,33 @@ struct AddEditEntryView: View {
                 Text("Are you sure you want to delete this macro entry?")
             }
             .onAppear {
+                guard !initialized else { return }
+                initialized = true
                 populateInitialData()
             }
+            .alert("Could Not Save", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
+                Button("OK", role: .cancel) {}
+            } message: { Text(saveError ?? "") }
         }
     }
     
     private func parseInput(_ text: String) -> Double {
         let cleaned = text.trimmingCharacters(in: .whitespaces)
             .replacingOccurrences(of: ",", with: ".")
-        return Double(cleaned) ?? 0
+        guard let value = Double(cleaned), value.isFinite, value >= 0 else { return 0 }
+        return value
     }
     
     private func populateInitialData() {
         if let entry = entryToEdit {
             name = entry.name
-            proteinText = entry.protein > 0 ? MacroTheme.formatAmount(entry.protein) : ""
-            carbsText = entry.carbs > 0 ? MacroTheme.formatAmount(entry.carbs) : ""
-            fatText = entry.fat > 0 ? MacroTheme.formatAmount(entry.fat) : ""
+            caloriesText = entry.reportedCalories.map { String($0) } ?? ""
+            proteinText = String(entry.protein)
+            carbsText = String(entry.carbs)
+            fatText = String(entry.fat)
             entryDate = entry.date
         } else {
+            name = initialName
             let calendar = Calendar.current
             if calendar.isDateInToday(initialDate) {
                 entryDate = Date()
@@ -263,12 +308,20 @@ struct AddEditEntryView: View {
     }
     
     private func saveEntry() {
+        guard isFormValid else { return }
         let p = proteinValue
         let c = carbsValue
         let f = fatValue
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         
         if let entry = entryToEdit {
+            if entry.protein != p || entry.carbs != c || entry.fat != f ||
+                entry.reportedCalories != (caloriesText.isEmpty ? nil : parseInput(caloriesText)) {
+                entry.portionDescription = nil
+                entry.dataSource = "Manual edit"
+                entry.energyIsEstimated = caloriesText.isEmpty
+            }
+            entry.reportedCalories = caloriesText.isEmpty ? nil : parseInput(caloriesText)
             entry.name = trimmedName
             entry.protein = p
             entry.carbs = c
@@ -282,11 +335,21 @@ struct AddEditEntryView: View {
                 fat: f,
                 date: entryDate
             )
+            newEntry.barcode = initialBarcode
+            newEntry.reportedCalories = caloriesText.isEmpty ? nil : parseInput(caloriesText)
+            newEntry.energyIsEstimated = caloriesText.isEmpty
+            newEntry.dataSource = "Manual"
             modelContext.insert(newEntry)
         }
         
-        try? modelContext.save()
-        dismiss()
+        do {
+            try modelContext.save()
+            dismiss()
+            onSaved?()
+        } catch {
+            modelContext.rollback()
+            saveError = error.localizedDescription
+        }
     }
 }
 

@@ -5,8 +5,7 @@ struct CalorieRingView: View {
     let goal: Double
     
     private var progress: Double {
-        guard goal > 0 else { return 0 }
-        return min(max(consumed / goal, 0), 1.0)
+        MacroProgress.fraction(consumed: consumed, goal: goal)
     }
     
     private var isOverGoal: Bool {
@@ -83,8 +82,7 @@ struct MacroProgressBarCard: View {
     let icon: String
     
     private var progress: Double {
-        guard goal > 0 else { return 0 }
-        return min(max(consumed / goal, 0), 1.0)
+        MacroProgress.fraction(consumed: consumed, goal: goal)
     }
     
     var body: some View {
@@ -119,8 +117,7 @@ struct MacroProgressBarCard: View {
             .frame(height: 8)
             
             HStack {
-                let percent = goal > 0 ? Int((consumed / goal) * 100) : 0
-                Text("\(percent)%")
+                Text(MacroProgress.percentLabel(consumed: consumed, goal: goal))
                     .font(.caption2)
                     .fontWeight(.medium)
                     .foregroundStyle(.secondary)

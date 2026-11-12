@@ -2,11 +2,49 @@ import SwiftUI
 import SwiftData
 
 struct ContentView: View {
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var selectedDate = Date()
+    @State private var followsToday = true
+    @State private var calendar = Calendar.current
+
+    var body: some View {
+        DiaryDayView(selectedDate: $selectedDate, calendar: calendar)
+            .environment(\.calendar, calendar)
+            .onChange(of: selectedDate) { _, date in
+                followsToday = calendar.isDateInToday(date)
+            }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active { refreshDay() }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in refreshDay() }
+            .onReceive(NotificationCenter.default.publisher(for: .NSSystemTimeZoneDidChange)) { _ in refreshDay() }
+    }
+
+    private func refreshDay() {
+        let updatedCalendar = Calendar.current
+        if followsToday {
+            selectedDate = Date()
+        } else {
+            // Keep the chosen calendar day when the device changes time zone.
+            let components = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: selectedDate)
+            selectedDate = updatedCalendar.date(from: components) ?? selectedDate
+        }
+        calendar = updatedCalendar
+    }
+}
+
+private struct DiaryDayView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \MacroEntry.date, order: .reverse) private var allEntries: [MacroEntry]
+    @Query private var dayEntries: [MacroEntry]
+    @Binding var selectedDate: Date
+
+    init(selectedDate: Binding<Date>, calendar: Calendar) {
+        _selectedDate = selectedDate
+        _dayEntries = Query(DiaryDates.descriptor(for: selectedDate.wrappedValue, calendar: calendar))
+    }
     @Query private var goals: [MacroGoal]
     
-    @State private var selectedDate: Date = Date()
+    @State private var saveError: String?
     @State private var isShowingAddEntrySheet: Bool = false
     @State private var entryToEdit: MacroEntry? = nil
     @State private var isShowingGoalsSheet: Bool = false
@@ -18,32 +56,12 @@ struct ContentView: View {
         goals.first ?? MacroGoal()
     }
     
-    private var dayEntries: [MacroEntry] {
-        let calendar = Calendar.current
-        return allEntries.filter { calendar.isDate($0.date, inSameDayAs: selectedDate) }
-    }
-    
-    private var totalCalories: Double {
-        dayEntries.reduce(0) { $0 + $1.calories }
-    }
-    
-    private var totalProtein: Double {
-        dayEntries.reduce(0) { $0 + $1.protein }
-    }
-    
-    private var totalCarbs: Double {
-        dayEntries.reduce(0) { $0 + $1.carbs }
-    }
-    
-    private var totalFat: Double {
-        dayEntries.reduce(0) { $0 + $1.fat }
-    }
-    
     private var isSelectedDateToday: Bool {
         Calendar.current.isDateInToday(selectedDate)
     }
     
     var body: some View {
+        let totals = DiaryTotals(entries: dayEntries)
         NavigationStack {
             ZStack(alignment: .bottomTrailing) {
                 ScrollView {
@@ -52,10 +70,10 @@ struct ContentView: View {
                         dateNavigator
                         
                         // Energy Dashboard Hero Card
-                        energyDashboardCard
+                        energyDashboardCard(totalCalories: totals.calories)
                         
                         // Macro Targets Cards
-                        macroCardsGrid
+                        macroCardsGrid(totals: totals)
                         
                         // Daily History Section
                         dailyHistorySection
@@ -90,7 +108,7 @@ struct ContentView: View {
                 }
             }
             .sheet(isPresented: $isShowingAddEntrySheet) {
-                AddEditEntryView(initialDate: selectedDate)
+                FoodEntryView(initialDate: selectedDate, followsToday: isSelectedDateToday)
             }
             .sheet(item: $entryToEdit) { entry in
                 AddEditEntryView(entryToEdit: entry, initialDate: entry.date)
@@ -110,7 +128,8 @@ struct ContentView: View {
                     if let entry = entryToDelete {
                         withAnimation {
                             modelContext.delete(entry)
-                            try? modelContext.save()
+                            do { try modelContext.save() }
+                            catch { modelContext.rollback(); saveError = error.localizedDescription }
                         }
                     }
                     entryToDelete = nil
@@ -121,6 +140,9 @@ struct ContentView: View {
             } message: {
                 Text("Are you sure you want to delete this macro entry?")
             }
+            .alert("Could Not Save", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
+                Button("OK", role: .cancel) {}
+            } message: { Text(saveError ?? "") }
             .onAppear {
                 ensureInitialGoalExists()
             }
@@ -192,7 +214,7 @@ struct ContentView: View {
         .padding(.bottom, !isSelectedDateToday ? 20 : 0)
     }
     
-    private var energyDashboardCard: some View {
+    private func energyDashboardCard(totalCalories: Double) -> some View {
         VStack(spacing: 12) {
             Text("Energy Summary")
                 .font(.subheadline)
@@ -207,11 +229,11 @@ struct ContentView: View {
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
     
-    private var macroCardsGrid: some View {
+    private func macroCardsGrid(totals: DiaryTotals) -> some View {
         VStack(spacing: 10) {
             MacroProgressBarCard(
                 title: "Protein",
-                consumed: totalProtein,
+                consumed: totals.protein,
                 goal: activeGoal.protein,
                 color: MacroTheme.protein,
                 icon: "flame.fill"
@@ -219,7 +241,7 @@ struct ContentView: View {
             
             MacroProgressBarCard(
                 title: "Carbohydrates",
-                consumed: totalCarbs,
+                consumed: totals.carbs,
                 goal: activeGoal.carbs,
                 color: MacroTheme.carbs,
                 icon: "bolt.fill"
@@ -227,7 +249,7 @@ struct ContentView: View {
             
             MacroProgressBarCard(
                 title: "Fat",
-                consumed: totalFat,
+                consumed: totals.fat,
                 goal: activeGoal.fat,
                 color: MacroTheme.fat,
                 icon: "drop.fill"
@@ -454,12 +476,13 @@ struct ContentView: View {
         if goals.isEmpty {
             let defaultGoal = MacroGoal()
             modelContext.insert(defaultGoal)
-            try? modelContext.save()
+            do { try modelContext.save() }
+            catch { modelContext.rollback(); saveError = error.localizedDescription }
         }
     }
 }
 
 #Preview {
     ContentView()
-        .modelContainer(for: [MacroEntry.self, MacroGoal.self], inMemory: true)
+        .modelContainer(for: [MacroEntry.self, MacroGoal.self, SavedFood.self], inMemory: true)
 }

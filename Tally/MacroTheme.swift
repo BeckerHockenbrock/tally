@@ -18,3 +18,18 @@ enum MacroTheme {
         String(format: "%.0f", value)
     }
 }
+
+/// Shared guards protect charts even when an older store contains invalid values.
+enum MacroProgress {
+    static func fraction(consumed: Double, goal: Double) -> Double {
+        guard consumed.isFinite, goal.isFinite, consumed >= 0, goal > 0 else { return 0 }
+        return min(consumed / goal, 1)
+    }
+
+    static func percentLabel(consumed: Double, goal: Double) -> String {
+        guard consumed.isFinite, goal.isFinite, consumed >= 0, goal > 0 else { return "0%" }
+        let percent = (consumed / goal) * 100
+        guard percent.isFinite, percent < 999_999 else { return "999999+%" }
+        return "\(Int(percent))%"
+    }
+}
