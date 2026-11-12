@@ -22,16 +22,18 @@ struct FoodEntryView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Group {
                 Section {
                     Button { showingScanner = true } label: {
                         Label("Scan Barcode", systemImage: "barcode.viewfinder")
-                            .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 8)
+                            .font(MacroTheme.bodyFont).frame(maxWidth: .infinity).padding(.vertical, 8)
+                            .foregroundStyle(.white)
                     }
-                    .buttonStyle(.borderedProminent).tint(MacroTheme.calories)
+                    .buttonStyle(.borderedProminent).tint(MacroTheme.accent)
                     .disabled(loading)
                     Button("Enter Food Manually") { showingManual = true }
                 }
-                Section("Enter a Barcode") {
+                Section {
                     TextField("8, 12, or 13 digits", text: $barcode).keyboardType(.numberPad)
                     Toggle("This is a UPC-E barcode", isOn: $isUPCE)
                     Text("For an 8-digit code, select UPC-E only if the package uses UPC-E rather than EAN-8.")
@@ -50,8 +52,8 @@ struct FoodEntryView: View {
                         Button("Retry") { startLookup() }.disabled(loading)
                         Button("Enter Nutrition Manually") { showingManual = true }
                     }
-                }
-                Section("Recent Foods") {
+                } header: { TallySectionLabel(text: "Enter a Barcode") }
+                Section {
                     if recentFoods.isEmpty {
                         Text("Scanned foods will appear here for quick reuse.").foregroundStyle(.secondary)
                     }
@@ -71,10 +73,16 @@ struct FoodEntryView: View {
                             }.font(.caption).disabled(loading)
                         }
                     }
-                }
+                } header: { TallySectionLabel(text: "Recent Foods") }
                 FoodAttribution()
+
+                }
+                .listRowBackground(MacroTheme.surface)
             }
-            .navigationTitle("Add Entry")
+            .tallyFormStyle()
+            .navigationTitle("Add Food")
+            .navigationBarTitleDisplayMode(.inline)
+
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
             }
@@ -97,6 +105,7 @@ struct FoodEntryView: View {
                                  initialBarcode: selectedFood?.barcode ?? lookupBarcode,
                                  initialName: selectedFood?.name ?? "",
                                  onSaved: { dismiss() })
+                    .tallySheet()
             }
             .onDisappear { lookupTask?.cancel() }
         }

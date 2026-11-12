@@ -37,6 +37,7 @@ struct FoodDetailView: View {
 
     var body: some View {
         Form {
+                Group {
             FoodHeader(food: food)
             if let cacheWarning {
                 Section {
@@ -45,7 +46,7 @@ struct FoodDetailView: View {
                 }
             }
             if !food.portions.isEmpty {
-                Section("Your Portion") {
+                Section {
                     Picker("Unit", selection: $unit) {
                         ForEach(food.portions) { portion in
                             Text(portion.unit.label).tag(portion.unit)
@@ -58,7 +59,7 @@ struct FoodDetailView: View {
                     if nutrition == nil {
                         Text("Enter a valid quantity greater than zero.").foregroundStyle(.red)
                     }
-                }
+                } header: { TallySectionLabel(text: "Your Portion") }
                 NutritionSummary(nutrition: nutrition)
             }
             if food.portions.isEmpty || nutrition?.isComplete != true {
@@ -70,15 +71,21 @@ struct FoodDetailView: View {
             Section {
                 Button(action: addToDiary) {
                     Label("Add to Diary", systemImage: "plus.circle.fill")
-                        .font(.headline).frame(maxWidth: .infinity)
+                        .font(MacroTheme.bodyFont).frame(maxWidth: .infinity)
+                        .foregroundStyle(.white)
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(MacroTheme.calories)
+                .tint(MacroTheme.accent)
                 .disabled(nutrition?.isComplete != true || saved)
             }
             FoodAttribution(barcode: food.barcode)
-        }
+
+                }
+                .listRowBackground(MacroTheme.surface)
+            }
+            .tallyFormStyle()
         .navigationTitle("Food Details")
+
         .navigationBarTitleDisplayMode(.inline)
         .onChange(of: unit) { _, newUnit in quantityText = newUnit == .servings ? "1" : "100" }
         .alert("Could Not Save Entry", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
@@ -135,7 +142,7 @@ private struct FoodHeader: View {
 private struct NutritionSummary: View {
     let nutrition: FoodNutrition?
     var body: some View {
-        Section("Nutrition for Your Portion") {
+        Section {
             NutritionRow(title: "Calories", value: nutrition?.calories, unit: "kcal", color: MacroTheme.calories)
             NutritionRow(title: "Protein", value: nutrition?.protein, unit: "g", color: MacroTheme.protein)
             NutritionRow(title: "Carbohydrates", value: nutrition?.carbs, unit: "g", color: MacroTheme.carbs)
@@ -144,7 +151,7 @@ private struct NutritionSummary: View {
                 Text("Energy estimate — database estimate or 4/4/9 calculation.")
                     .font(.caption).foregroundStyle(.secondary)
             }
-        }
+        } header: { TallySectionLabel(text: "Nutrition for Your Portion") }
     }
 }
 

@@ -4,7 +4,7 @@ import SwiftData
 struct AddEditEntryView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
-    
+
     var entryToEdit: MacroEntry?
     var initialDate: Date
     var initialBarcode: String?
@@ -13,7 +13,7 @@ struct AddEditEntryView: View {
     @State private var caloriesText = ""
     @State private var saveError: String?
     @State private var initialized = false
-    
+
     @State private var name: String = ""
     @State private var proteinText: String = ""
     @State private var carbsText: String = ""
@@ -21,11 +21,11 @@ struct AddEditEntryView: View {
     @State private var entryDate: Date = Date()
     @State private var isShowingDeleteConfirm: Bool = false
     @FocusState private var focusedField: Field?
-    
+
     enum Field: Hashable {
         case name, protein, carbs, fat
     }
-    
+
     init(entryToEdit: MacroEntry? = nil, initialDate: Date = Date(), initialBarcode: String? = nil,
          initialName: String = "", onSaved: (() -> Void)? = nil) {
         self.entryToEdit = entryToEdit
@@ -34,23 +34,23 @@ struct AddEditEntryView: View {
         self.initialName = initialName
         self.onSaved = onSaved
     }
-    
+
     private var proteinValue: Double {
         parseInput(proteinText)
     }
-    
+
     private var carbsValue: Double {
         parseInput(carbsText)
     }
-    
+
     private var fatValue: Double {
         parseInput(fatText)
     }
-    
+
     private var calculatedCalories: Double {
         (proteinValue * 4.0) + (carbsValue * 4.0) + (fatValue * 9.0)
     }
-    
+
     private var isFormValid: Bool {
         let macros = [proteinText, carbsText, fatText]
         let valid = macros.allSatisfy { text in
@@ -63,19 +63,20 @@ struct AddEditEntryView: View {
         let explicit = (initialBarcode == nil || macros.allSatisfy { !$0.isEmpty })
         return valid && energyValid && explicit && (proteinValue > 0 || carbsValue > 0 || fatValue > 0 || !caloriesText.isEmpty)
     }
-    
+
     var body: some View {
         NavigationStack {
             Form {
+                Group {
                 Section {
                     TextField("Entry name (e.g., Lunch, Protein Shake)", text: $name)
                         .focused($focusedField, equals: .name)
-                    
+
                     DatePicker("Date & Time", selection: $entryDate, displayedComponents: [.date, .hourAndMinute])
                 } header: {
-                    Text("Details")
+                    TallySectionLabel(text: "Details")
                 }
-                
+
                 Section {
                     HStack {
                         Label {
@@ -93,7 +94,7 @@ struct AddEditEntryView: View {
                         Text("g")
                             .foregroundStyle(.secondary)
                     }
-                    
+
                     HStack {
                         Label {
                             Text("Carbs")
@@ -110,7 +111,7 @@ struct AddEditEntryView: View {
                         Text("g")
                             .foregroundStyle(.secondary)
                     }
-                    
+
                     HStack {
                         Label {
                             Text("Fat")
@@ -128,13 +129,13 @@ struct AddEditEntryView: View {
                             .foregroundStyle(.secondary)
                     }
                 } header: {
-                    Text("Macros (Grams)")
+                    TallySectionLabel(text: "Macros (Grams)")
                 } footer: {
                     Text("4 cal/g protein • 4 cal/g carbs • 9 cal/g fat")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
-                
+
                 Section {
                     VStack(alignment: .leading, spacing: 12) {
                         HStack(alignment: .firstTextBaseline) {
@@ -142,13 +143,13 @@ struct AddEditEntryView: View {
                                 .font(.headline)
                             Spacer()
                             Text(MacroTheme.formatCalories(calculatedCalories))
-                                .font(.system(size: 32, weight: .bold, design: .rounded))
+                                .font(.largeTitle.weight(.semibold))
                                 .foregroundStyle(MacroTheme.calories)
                             Text("kcal")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
-                        
+
                         // Mini breakdown bar
                         if calculatedCalories > 0 {
                             GeometryReader { proxy in
@@ -156,7 +157,7 @@ struct AddEditEntryView: View {
                                 let pWidth = proxy.size.width * CGFloat((proteinValue * 4.0) / total)
                                 let cWidth = proxy.size.width * CGFloat((carbsValue * 4.0) / total)
                                 let fWidth = proxy.size.width * CGFloat((fatValue * 9.0) / total)
-                                
+
                                 HStack(spacing: 2) {
                                     if pWidth > 0 {
                                         RoundedRectangle(cornerRadius: 3)
@@ -177,7 +178,7 @@ struct AddEditEntryView: View {
                             }
                             .frame(height: 8)
                             .clipShape(Capsule())
-                            
+
                             HStack {
                                 MacroPill(label: "Protein", calories: proteinValue * 4, color: MacroTheme.protein)
                                 Spacer()
@@ -190,9 +191,9 @@ struct AddEditEntryView: View {
                     }
                     .padding(.vertical, 4)
                 } header: {
-                    Text("Estimated Energy from Macros")
+                    TallySectionLabel(text: "Estimated Energy from Macros")
                 }
-                
+
                 Section {
                     TextField("Calories from label (optional)", text: $caloriesText)
                         .keyboardType(.decimalPad)
@@ -219,8 +220,13 @@ struct AddEditEntryView: View {
                         }
                     }
                 }
+
+                }
+                .listRowBackground(MacroTheme.surface)
             }
+            .tallyFormStyle()
             .navigationTitle(entryToEdit == nil ? "Add Entry" : "Edit Entry")
+
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -228,7 +234,7 @@ struct AddEditEntryView: View {
                         dismiss()
                     }
                 }
-                
+
                 ToolbarItem(placement: .confirmationAction) {
                     Button(entryToEdit == nil ? "Save" : "Update") {
                         saveEntry()
@@ -236,7 +242,7 @@ struct AddEditEntryView: View {
                     .disabled(!isFormValid)
                     .fontWeight(.semibold)
                 }
-                
+
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
                     Button("Done") {
@@ -275,14 +281,14 @@ struct AddEditEntryView: View {
             } message: { Text(saveError ?? "") }
         }
     }
-    
+
     private func parseInput(_ text: String) -> Double {
         let cleaned = text.trimmingCharacters(in: .whitespaces)
             .replacingOccurrences(of: ",", with: ".")
         guard let value = Double(cleaned), value.isFinite, value >= 0 else { return 0 }
         return value
     }
-    
+
     private func populateInitialData() {
         if let entry = entryToEdit {
             name = entry.name
@@ -306,14 +312,14 @@ struct AddEditEntryView: View {
             focusedField = .name
         }
     }
-    
+
     private func saveEntry() {
         guard isFormValid else { return }
         let p = proteinValue
         let c = carbsValue
         let f = fatValue
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        
+
         if let entry = entryToEdit {
             if entry.protein != p || entry.carbs != c || entry.fat != f ||
                 entry.reportedCalories != (caloriesText.isEmpty ? nil : parseInput(caloriesText)) {
@@ -341,7 +347,7 @@ struct AddEditEntryView: View {
             newEntry.dataSource = "Manual"
             modelContext.insert(newEntry)
         }
-        
+
         do {
             try modelContext.save()
             dismiss()
@@ -357,7 +363,7 @@ private struct MacroPill: View {
     let label: String
     let calories: Double
     let color: Color
-    
+
     var body: some View {
         HStack(spacing: 4) {
             Circle()

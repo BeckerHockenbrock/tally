@@ -5,29 +5,29 @@ struct GoalsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Query private var goals: [MacroGoal]
-    
+
     @State private var saveError: String?
     @State private var calorieText: String = ""
     @State private var proteinText: String = ""
     @State private var carbsText: String = ""
     @State private var fatText: String = ""
     @FocusState private var focusedField: Field?
-    
+
     enum Field: Hashable {
         case calories, protein, carbs, fat
     }
-    
+
     private var currentGoal: MacroGoal? {
         goals.first
     }
-    
+
     private var caloriesFromMacros: Double {
         let p = parseInput(proteinText)
         let c = parseInput(carbsText)
         let f = parseInput(fatText)
         return (p * 4.0) + (c * 4.0) + (f * 9.0)
     }
-    
+
     private var isFormValid: Bool {
         GoalInput.value(calorieText, calories: true) != nil &&
         [proteinText, carbsText, fatText].allSatisfy { GoalInput.value($0) != nil }
@@ -36,6 +36,7 @@ struct GoalsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Group {
                 Section {
                     HStack {
                         Label {
@@ -54,7 +55,7 @@ struct GoalsView: View {
                             .foregroundStyle(.secondary)
                     }
                 } header: {
-                    Text("Energy Target")
+                    TallySectionLabel(text: "Energy Target")
                 } footer: {
                     if caloriesFromMacros > 0 {
                         Button {
@@ -69,7 +70,7 @@ struct GoalsView: View {
                         .padding(.top, 4)
                     }
                 }
-                
+
                 Section {
                     HStack {
                         Label {
@@ -87,7 +88,7 @@ struct GoalsView: View {
                         Text("g")
                             .foregroundStyle(.secondary)
                     }
-                    
+
                     HStack {
                         Label {
                             Text("Carbs")
@@ -104,7 +105,7 @@ struct GoalsView: View {
                         Text("g")
                             .foregroundStyle(.secondary)
                     }
-                    
+
                     HStack {
                         Label {
                             Text("Fat")
@@ -122,14 +123,19 @@ struct GoalsView: View {
                             .foregroundStyle(.secondary)
                     }
                 } header: {
-                    Text("Daily Macro Targets")
+                    TallySectionLabel(text: "Daily Macro Targets")
                 } footer: {
                     Text("Macro targets determine the progress bars on your dashboard. Enter zero or 0.1–100,000 g per macro, and 100–1,000,000 calories.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
+
+                }
+                .listRowBackground(MacroTheme.surface)
             }
+            .tallyFormStyle()
             .navigationTitle("Daily Goals")
+
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -159,14 +165,14 @@ struct GoalsView: View {
             }
         }
     }
-    
+
     private func parseInput(_ text: String) -> Double {
         let cleaned = text.trimmingCharacters(in: .whitespaces)
             .replacingOccurrences(of: ",", with: ".")
         guard let value = Double(cleaned), value.isFinite, value >= 0, value <= 1_000_000 else { return 0 }
         return value
     }
-    
+
     private func loadCurrentGoals() {
         if let existing = currentGoal {
             calorieText = GoalInput.editingText(existing.calories)
@@ -180,13 +186,13 @@ struct GoalsView: View {
             fatText = "65"
         }
     }
-    
+
     private func saveGoals() {
         guard let cal = GoalInput.value(calorieText, calories: true),
               let p = GoalInput.value(proteinText),
               let c = GoalInput.value(carbsText),
               let f = GoalInput.value(fatText) else { return }
-        
+
         if let existing = currentGoal {
             existing.calories = cal
             existing.protein = p
@@ -203,7 +209,7 @@ struct GoalsView: View {
             )
             modelContext.insert(newGoal)
         }
-        
+
         do { try modelContext.save(); dismiss() }
         catch { modelContext.rollback(); saveError = error.localizedDescription }
     }

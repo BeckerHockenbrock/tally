@@ -1,76 +1,59 @@
 import SwiftUI
 
-struct CalorieRingView: View {
+struct EnergySummaryView: View {
     let consumed: Double
     let goal: Double
-    
-    private var progress: Double {
-        MacroProgress.fraction(consumed: consumed, goal: goal)
-    }
-    
-    private var isOverGoal: Bool {
-        consumed > goal && goal > 0
-    }
-    
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @ScaledMetric(relativeTo: .largeTitle) private var amountSize = 48
+
+    private var progress: Double { MacroProgress.fraction(consumed: consumed, goal: goal) }
+
     var body: some View {
-        ZStack {
-            // Background track
-            Circle()
-                .stroke(MacroTheme.calories.opacity(0.18), lineWidth: 14)
-            
-            // Progress arc
-            Circle()
-                .trim(from: 0, to: CGFloat(progress))
-                .stroke(
-                    AngularGradient(
-                        gradient: Gradient(colors: [
-                            MacroTheme.calories.opacity(0.8),
-                            MacroTheme.calories
-                        ]),
-                        center: .center,
-                        startAngle: .degrees(-90),
-                        endAngle: .degrees(270)
-                    ),
-                    style: StrokeStyle(lineWidth: 14, lineCap: .round)
-                )
-                .rotationEffect(.degrees(-90))
-                .animation(.spring(response: 0.6, dampingFraction: 0.75), value: progress)
-            
-            // Inner content
-            VStack(spacing: 2) {
-                Text(MacroTheme.formatCalories(consumed))
-                    .font(.system(size: 34, weight: .bold, design: .rounded))
-                    .foregroundStyle(.primary)
-                
-                Text("of \(MacroTheme.formatCalories(goal)) kcal")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fontWeight(.medium)
-                
-                if isOverGoal {
-                    Text("+\(MacroTheme.formatCalories(consumed - goal)) over")
-                        .font(.caption2)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.red)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.red.opacity(0.12), in: Capsule())
-                        .padding(.top, 2)
-                } else {
-                    let remaining = max(0, goal - consumed)
-                    Text("\(MacroTheme.formatCalories(remaining)) left")
-                        .font(.caption2)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(MacroTheme.calories)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(MacroTheme.calories.opacity(0.12), in: Capsule())
-                        .padding(.top, 2)
+        VStack(alignment: .leading, spacing: 20) {
+            Label("Calories", systemImage: "flame.fill")
+                .font(.headline)
+                .foregroundStyle(MacroTheme.calories)
+
+            HStack(spacing: 20) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(MacroTheme.formatCalories(consumed))
+                        .font(.system(size: amountSize, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
+                        .contentTransition(reduceMotion ? .identity : .numericText())
+                        .animation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 1), value: consumed)
+                        .accessibilityLabel("\(MacroTheme.formatCalories(consumed)) calories consumed")
+                    Text("of \(MacroTheme.formatCalories(goal)) kcal")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+                if !dynamicTypeSize.isAccessibilitySize {
+                    ZStack {
+                        Circle().stroke(MacroTheme.calories.opacity(0.15), lineWidth: 9)
+                        Circle().trim(from: 0, to: progress)
+                            .stroke(MacroTheme.calories, style: StrokeStyle(lineWidth: 9, lineCap: .round))
+                            .rotationEffect(.degrees(-90))
+                            .animation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 1), value: progress)
+                        Text(MacroProgress.percentLabel(consumed: consumed, goal: goal))
+                            .font(.subheadline.weight(.semibold))
+                            .monospacedDigit()
+                    }
+                    .frame(width: 84, height: 84)
+                    .padding(5)
+                    .accessibilityHidden(true)
                 }
             }
+
+            Label("\(MacroTheme.formatCalories(abs(goal - consumed))) kcal \(consumed > goal ? "over goal" : "remaining")",
+                  systemImage: consumed > goal ? "plus.circle" : "target")
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(consumed > goal ? Color.red : Color.secondary)
         }
-        .frame(width: 160, height: 160)
-        .padding(8)
+        .padding(20)
+        .tallyPanel()
     }
 }
 
@@ -80,66 +63,50 @@ struct MacroProgressBarCard: View {
     let goal: Double
     let color: Color
     let icon: String
-    
-    private var progress: Double {
-        MacroProgress.fraction(consumed: consumed, goal: goal)
-    }
-    
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    private var progress: Double { MacroProgress.fraction(consumed: consumed, goal: goal) }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.caption)
-                    .foregroundStyle(color)
-                Text(title)
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text("\(MacroTheme.formatAmount(consumed))/\(MacroTheme.formatAmount(goal))g")
-                    .font(.caption)
-                    .fontWeight(.bold)
-                    .foregroundStyle(.primary)
+        VStack(alignment: .leading, spacing: 12) {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 8) {
+                    macroLabel
+                    amountLabel
+                }
+            } else {
+                HStack(spacing: 12) {
+                    macroLabel
+                    Spacer(minLength: 8)
+                    amountLabel
+                }
             }
-            
             GeometryReader { proxy in
                 ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(color.opacity(0.15))
-                        .frame(height: 8)
-                    
-                    Capsule()
-                        .fill(color)
-                        .frame(width: max(0, proxy.size.width * CGFloat(progress)), height: 8)
-                        .animation(.spring(response: 0.5, dampingFraction: 0.75), value: progress)
+                    Capsule().fill(color.opacity(0.14))
+                    Capsule().fill(color).frame(width: proxy.size.width * progress)
                 }
             }
-            .frame(height: 8)
-            
-            HStack {
-                Text(MacroProgress.percentLabel(consumed: consumed, goal: goal))
-                    .font(.caption2)
-                    .fontWeight(.medium)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                let remaining = goal - consumed
-                if remaining > 0 {
-                    Text("\(MacroTheme.formatAmount(remaining))g left")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                } else if remaining < 0 {
-                    Text("\(MacroTheme.formatAmount(abs(remaining)))g over")
-                        .font(.caption2)
-                        .foregroundStyle(.red)
-                } else {
-                    Text("Goal met")
-                        .font(.caption2)
-                        .foregroundStyle(color)
-                }
-            }
+            .frame(height: 5)
+            .animation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 1), value: progress)
         }
-        .padding(12)
-        .background(Color(uiColor: .secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .padding(16)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
+        .accessibilityValue("\(MacroTheme.formatAmount(consumed)) grams of \(MacroTheme.formatAmount(goal)) grams, \(MacroProgress.percentLabel(consumed: consumed, goal: goal))")
+    }
+
+    private var macroLabel: some View {
+        Label(title, systemImage: icon)
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(color)
+    }
+
+    private var amountLabel: some View {
+        Text("\(MacroTheme.formatAmount(consumed)) / \(MacroTheme.formatAmount(goal)) g")
+            .font(.subheadline)
+            .monospacedDigit()
+            .foregroundStyle(.secondary)
     }
 }
