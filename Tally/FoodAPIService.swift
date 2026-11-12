@@ -24,13 +24,14 @@ enum FoodAPIConfiguration {
     static let baseURL = "https://world.openfoodfacts.org"
 }
 
-/// Serializes requests and enforces a conservative 15 requests/minute per app process.
+/// Limits product requests to 15/minute and submitted searches to 8/minute per process.
 actor FoodAPIService {
     static let shared = FoodAPIService()
     private let session: URLSession
     private let contact: String
     private let baseURL: String
     private var requestDates: [Date] = []
+    private var searchDates: [Date] = []
     private var retryAfter: Date?
 
     init(session: URLSession = .shared, contact: String = FoodAPIConfiguration.contact,
@@ -42,33 +43,59 @@ actor FoodAPIService {
 
     func lookup(barcode: String) async throws -> Food {
         let code = try FoodBarcode.validated(barcode)
+        let data = try await request(path: "api/v3.6/product/\(code).json", queryItems: [
+            URLQueryItem(name: "fields", value:
+                "code,product_name,product_name_en,brands,image_front_url,serving_size,serving_quantity,serving_quantity_unit,nutrition")
+        ])
+        return try Self.decode(data, requestedBarcode: code)
+    }
+
+    func search(query: String) async throws -> [FoodSearchResult] {
+        let terms = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !terms.isEmpty else { return [] }
+        // The product v2/v3 APIs do not support full-text search. Use the documented
+        // keyword endpoint for discovery, then v3.6 for the selected food's nutrition.
+        let data = try await request(path: "cgi/search.pl", queryItems: [
+            URLQueryItem(name: "action", value: "process"),
+            URLQueryItem(name: "search_simple", value: "1"),
+            URLQueryItem(name: "search_terms", value: terms),
+            URLQueryItem(name: "json", value: "1"),
+            URLQueryItem(name: "page_size", value: "25"),
+            URLQueryItem(name: "fields", value: "code,product_name,product_name_en,brands,image_front_url")
+        ], isSearch: true)
+        return try Self.decodeSearch(data)
+    }
+
+    private func request(path: String, queryItems: [URLQueryItem], isSearch: Bool = false) async throws -> Data {
+        try Task.checkCancellation()
         guard !contact.contains("REPLACE_"), contact.contains("@"),
               !contact.contains("\n"), !contact.contains("\r") else { throw FoodAPIError.configuration }
         let now = Date()
         if let retryAfter, retryAfter > now { throw FoodAPIError.rateLimited(retryAfter) }
         requestDates.removeAll { now.timeIntervalSince($0) >= 60 }
-        if requestDates.count >= 15, let first = requestDates.first {
+        searchDates.removeAll { now.timeIntervalSince($0) >= 60 }
+        let dates = isSearch ? searchDates : requestDates
+        if dates.count >= (isSearch ? 8 : 15), let first = dates.first {
             throw FoodAPIError.rateLimited(first.addingTimeInterval(60))
         }
-        requestDates.append(now)
         guard let baseURL = URL(string: baseURL), baseURL.scheme == "https" else { throw FoodAPIError.configuration }
-        var components = URLComponents(url: baseURL.appendingPathComponent("api/v3.6/product/\(code).json"),
+        var components = URLComponents(url: baseURL.appendingPathComponent(path),
                                        resolvingAgainstBaseURL: false)
-        components?.queryItems = [URLQueryItem(name: "fields", value:
-            "code,product_name,product_name_en,brands,image_front_url,serving_size,serving_quantity,serving_quantity_unit,nutrition")]
-        guard let url = components?.url else { throw FoodAPIError.invalidBarcode }
+        components?.queryItems = queryItems
+        guard let url = components?.url else { throw FoodAPIError.configuration }
         var request = URLRequest(url: url, timeoutInterval: 20)
         request.setValue("Tally/1.0 (\(contact))", forHTTPHeaderField: "User-Agent")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         if baseURL.host == "world.openfoodfacts.net" {
             request.setValue("Basic " + Data("off:off".utf8).base64EncodedString(), forHTTPHeaderField: "Authorization")
         }
+        if isSearch { searchDates.append(now) } else { requestDates.append(now) }
         do {
             let (data, response) = try await session.data(for: request)
             try Task.checkCancellation()
             guard let http = response as? HTTPURLResponse else { throw FoodAPIError.malformedResponse }
             switch http.statusCode {
-            case 200: return try Self.decode(data, requestedBarcode: code)
+            case 200: return data
             case 404: throw FoodAPIError.notFound
             case 429:
                 let header = http.value(forHTTPHeaderField: "Retry-After") ?? ""
@@ -86,6 +113,21 @@ actor FoodAPIService {
             if error.code == .cancelled { throw CancellationError() }
             if error.code == .timedOut { throw FoodAPIError.timeout }
             throw FoodAPIError.network(error.localizedDescription)
+        }
+    }
+
+    static func decodeSearch(_ data: Data) throws -> [FoodSearchResult] {
+        struct Response: Decodable { let products: [OFFProduct] }
+        let response: Response
+        do { response = try JSONDecoder().decode(Response.self, from: data) }
+        catch { throw FoodAPIError.malformedResponse }
+        var seen = Set<String>()
+        return response.products.compactMap { product in
+            guard let code = product.code, let valid = try? FoodBarcode.validated(code) else { return nil }
+            let key = FoodBarcode.cacheKey(valid)
+            guard seen.insert(key).inserted else { return nil }
+            let food = product.food(barcode: key)
+            return FoodSearchResult(barcode: key, name: food.name, brand: food.brand, imageURL: food.imageURL)
         }
     }
 

@@ -1,5 +1,14 @@
 import Foundation
 
+/// Search returns identity only; nutrition is loaded through the normal cached lookup.
+struct FoodSearchResult: Identifiable, Hashable {
+    var id: String { barcode }
+    let barcode: String
+    let name: String
+    let brand: String?
+    let imageURL: URL?
+}
+
 /// Database definitions are values, independent of persisted diary snapshots.
 struct Food: Codable, Identifiable, Hashable {
     var id: String { barcode }

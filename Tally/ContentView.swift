@@ -6,10 +6,51 @@ struct ContentView: View {
     @State private var selectedDate = Date()
     @State private var followsToday = true
     @State private var calendar = Calendar.current
+    @State private var selectedTab = TallyTab.today
+    @State private var showingAddMenu = false
+    @State private var pendingFoodMode: FoodEntryMode?
+    @State private var foodMode: FoodEntryMode?
 
     var body: some View {
-        DiaryDayView(selectedDate: $selectedDate, calendar: calendar)
+        TabView(selection: $selectedTab) {
+            DiaryDayView(selectedDate: $selectedDate, calendar: calendar)
+                .tag(TallyTab.today)
+                .tabItem { Label("Today", systemImage: "square.grid.2x2") }
+                .toolbar(.hidden, for: .tabBar)
+            DiaryDayView(selectedDate: $selectedDate, calendar: calendar, showsOverview: false)
+                .tag(TallyTab.diary)
+                .tabItem { Label("Diary", systemImage: "book.closed") }
+                .toolbar(.hidden, for: .tabBar)
+            FoodLibraryView { foodMode = .search }
+                .tag(TallyTab.foods)
+                .tabItem { Label("Foods", systemImage: "fork.knife") }
+                .toolbar(.hidden, for: .tabBar)
+            GoalsView(isTab: true)
+                .tag(TallyTab.goals)
+                .tabItem { Label("Goals", systemImage: "target") }
+                .toolbar(.hidden, for: .tabBar)
+        }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                TallyBottomBar(selection: $selectedTab) { showingAddMenu = true }
+            }
+            .sheet(isPresented: $showingAddMenu, onDismiss: {
+                foodMode = pendingFoodMode
+                pendingFoodMode = nil
+            }) {
+                AddFoodMenu(date: foodDate) { mode in
+                    pendingFoodMode = mode
+                    showingAddMenu = false
+                }
+                .tallySheet()
+            }
+            .sheet(item: $foodMode) { mode in
+                FoodEntryView(initialDate: foodDate, followsToday: calendar.isDateInToday(foodDate), initialMode: mode)
+                    .tallySheet()
+            }
             .environment(\.calendar, calendar)
+            .onChange(of: selectedTab) { _, tab in
+                if tab == .today { selectedDate = Date() }
+            }
             .onChange(of: selectedDate) { _, date in
                 followsToday = calendar.isDateInToday(date)
             }
@@ -18,6 +59,10 @@ struct ContentView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in refreshDay() }
             .onReceive(NotificationCenter.default.publisher(for: .NSSystemTimeZoneDidChange)) { _ in refreshDay() }
+    }
+
+    private var foodDate: Date {
+        selectedTab == .today || selectedTab == .diary ? selectedDate : Date()
     }
 
     private func refreshDay() {
@@ -33,6 +78,130 @@ struct ContentView: View {
     }
 }
 
+private enum TallyTab: String {
+    case today, diary, foods, goals
+}
+
+private struct TallyBottomBar: View {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.colorSchemeContrast) private var contrast
+    @Binding var selection: TallyTab
+    let onAdd: () -> Void
+
+    var body: some View {
+        HStack(spacing: 0) {
+            tab(.today, title: "Today", icon: "square.grid.2x2", selectedIcon: "square.grid.2x2.fill")
+            tab(.diary, title: "Diary", icon: "book.closed", selectedIcon: "book.closed.fill")
+            Button(action: onAdd) {
+                VStack(spacing: 4) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 54, height: 54)
+                        .background(MacroTheme.accent.gradient, in: Circle())
+                        .shadow(color: MacroTheme.accent.opacity(0.24), radius: 9, y: 4)
+                    Text("Add").font(.caption2.weight(.semibold)).foregroundStyle(MacroTheme.accent)
+                }
+                .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(TallyPressStyle())
+            .accessibilityLabel("Add food")
+            .accessibilityHint("Choose barcode scanning or food search")
+            tab(.foods, title: "Foods", icon: "fork.knife", selectedIcon: "fork.knife")
+            tab(.goals, title: "Goals", icon: "target", selectedIcon: "target")
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 10)
+        .padding(.bottom, 4)
+        .frame(maxWidth: 640)
+        .frame(maxWidth: .infinity)
+        .background {
+            if reduceTransparency { MacroTheme.surface.ignoresSafeArea(edges: .bottom) }
+            else { Rectangle().fill(.bar).ignoresSafeArea(edges: .bottom) }
+        }
+        .overlay(alignment: .top) {
+            Rectangle().fill(MacroTheme.line.opacity(contrast == .increased ? 1 : 0.25)).frame(height: 0.5)
+        }
+    }
+
+    private func tab(_ value: TallyTab, title: String, icon: String, selectedIcon: String) -> some View {
+        Button { selection = value } label: {
+            VStack(spacing: 4) {
+                Image(systemName: selection == value ? selectedIcon : icon)
+                    .font(.system(size: 21, weight: .medium))
+                    .frame(width: 52, height: 38)
+                    .background(selection == value ? MacroTheme.accent.opacity(0.1) : .clear, in: Capsule())
+                Text(title).font(.caption2.weight(selection == value ? .semibold : .medium))
+                    .lineLimit(1).minimumScaleFactor(0.75)
+            }
+            .foregroundStyle(selection == value ? MacroTheme.accent : MacroTheme.secondary)
+            .frame(maxWidth: .infinity, minHeight: 64)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(TallyPressStyle())
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(selection == value ? [.isSelected] : [])
+    }
+}
+
+private struct AddFoodMenu: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    let date: Date
+    let onSelect: (FoodEntryMode) -> Void
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("Add food").font(.system(.title, design: .rounded, weight: .bold))
+                        Text(Calendar.current.isDateInToday(date) ? "What’s on your plate today?" : "For \(date.formatted(date: .abbreviated, time: .omitted))")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark").font(.subheadline.weight(.semibold))
+                            .frame(width: 44, height: 44)
+                            .background(MacroTheme.secondary.opacity(0.1), in: Circle())
+                    }
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel("Close add food menu")
+                }
+                option(.search, title: "Search foods", subtitle: "Find a food by name or brand", icon: "magnifyingglass", prominent: true)
+                option(.barcode, title: "Scan a barcode", subtitle: "Use the nutrition on your package", icon: "barcode.viewfinder", prominent: false)
+            }
+            .padding(24)
+        }
+        .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.height(350), .large])
+    }
+
+    private func option(_ mode: FoodEntryMode, title: String, subtitle: String, icon: String, prominent: Bool) -> some View {
+        Button { onSelect(mode) } label: {
+            HStack(spacing: 16) {
+                Image(systemName: icon).font(.title2.weight(.medium))
+                    .frame(width: 48, height: 48)
+                    .background(prominent ? .white.opacity(0.16) : MacroTheme.accent.opacity(0.1), in: RoundedRectangle(cornerRadius: 14))
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(title).font(.headline)
+                    Text(subtitle).font(.caption).opacity(prominent ? 0.9 : 0.7)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "arrow.up.right").font(.subheadline.weight(.semibold))
+            }
+            .foregroundStyle(prominent ? .white : MacroTheme.text)
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+                if prominent { RoundedRectangle(cornerRadius: 22).fill(MacroTheme.accent.gradient) }
+                else { RoundedRectangle(cornerRadius: 22).fill(MacroTheme.surface) }
+            }
+        }
+        .buttonStyle(TallyPressStyle())
+    }
+}
+
 private struct DiaryDayView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -41,17 +210,17 @@ private struct DiaryDayView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var dayEntries: [MacroEntry]
     @Binding var selectedDate: Date
+    let showsOverview: Bool
 
-    init(selectedDate: Binding<Date>, calendar: Calendar) {
+    init(selectedDate: Binding<Date>, calendar: Calendar, showsOverview: Bool = true) {
         _selectedDate = selectedDate
         _dayEntries = Query(DiaryDates.descriptor(for: selectedDate.wrappedValue, calendar: calendar))
+        self.showsOverview = showsOverview
     }
     @Query private var goals: [MacroGoal]
     
     @State private var saveError: String?
-    @State private var isShowingAddEntrySheet: Bool = false
     @State private var entryToEdit: MacroEntry? = nil
-    @State private var isShowingGoalsSheet: Bool = false
     @State private var isShowingDatePickerSheet: Bool = false
     @State private var entryToDelete: MacroEntry? = nil
     @State private var isShowingDeleteConfirmation: Bool = false
@@ -70,10 +239,12 @@ private struct DiaryDayView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: contentSpacing) {
                     dateNavigator
-                    energyDashboardCard(totalCalories: totals.calories)
-                    VStack(alignment: .leading, spacing: 12) {
-                        TallySectionLabel(text: "Macros")
-                        macroCardsGrid(totals: totals)
+                    if showsOverview {
+                        energyDashboardCard(totalCalories: totals.calories)
+                        VStack(alignment: .leading, spacing: 12) {
+                            TallySectionLabel(text: "Macros")
+                            macroCardsGrid(totals: totals)
+                        }
                     }
                     dailyHistorySection
                 }
@@ -83,35 +254,11 @@ private struct DiaryDayView: View {
                 .frame(maxWidth: .infinity)
             }
             .background(MacroTheme.background)
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                addFoodButton
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 10)
-                    .frame(maxWidth: .infinity)
-                    .background(.bar)
-            }
-            .navigationTitle("Tally")
+            .navigationTitle(showsOverview ? "Tally" : "Diary")
             .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { isShowingGoalsSheet = true } label: {
-                        Label("Goals", systemImage: "target")
-                            .font(MacroTheme.labelFont)
-                    }
-                    .tint(MacroTheme.accent)
-                    .accessibilityLabel("Edit daily goals")
-                }
-            }
-            .sheet(isPresented: $isShowingAddEntrySheet) {
-                FoodEntryView(initialDate: selectedDate, followsToday: isSelectedDateToday)
-                    .tallySheet()
-            }
             .sheet(item: $entryToEdit) { entry in
                 AddEditEntryView(entryToEdit: entry, initialDate: entry.date)
                     .tallySheet()
-            }
-            .sheet(isPresented: $isShowingGoalsSheet) {
-                GoalsView().tallySheet()
             }
             .sheet(isPresented: $isShowingDatePickerSheet) {
                 datePickerSheet
@@ -141,7 +288,7 @@ private struct DiaryDayView: View {
                 Button("OK", role: .cancel) {}
             } message: { Text(saveError ?? "") }
             .onAppear {
-                ensureInitialGoalExists()
+                if showsOverview { ensureInitialGoalExists() }
             }
         }
     }
@@ -336,21 +483,6 @@ private struct DiaryDayView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
             .tallyPanel()
-    }
-
-    private var addFoodButton: some View {
-        Button { isShowingAddEntrySheet = true } label: {
-            Label("Add Food", systemImage: "plus")
-                .labelStyle(.titleAndIcon)
-                .font(.headline)
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 4)
-        }
-        .buttonStyle(.borderedProminent)
-        .buttonBorderShape(.capsule)
-        .controlSize(.large)
-        .accessibilityLabel("Add food entry")
     }
 
     private var datePickerSheet: some View {

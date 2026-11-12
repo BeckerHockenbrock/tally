@@ -156,6 +156,85 @@ struct FoodTests {
         defer { MockFoodProtocol.failure = nil }
         await #expect(throws: FoodAPIError.self) { try await timeoutService.lookup(barcode: "012345678905") }
     }
+
+    static let searchFixture = """
+    {"products":[
+      {"code":"012345678905","product_name":"Peanut butter","brands":"Example","image_front_url":"https://images.openfoodfacts.org/example.jpg"},
+      {"code":"0012345678905","product_name":"Duplicate UPC"},
+      {"code":"12345678","product_name":" ","product_name_en":"English name"},
+      {"code":"invalid","product_name":"Invalid barcode"},
+      {"product_name":"Missing barcode"}
+    ]}
+    """
+
+    @Test func searchDecodingKeepsUsableUniqueIdentities() throws {
+        let results = try FoodAPIService.decodeSearch(Data(Self.searchFixture.utf8))
+        #expect(results.count == 2)
+        #expect(results[0].barcode == "0012345678905")
+        #expect(results[0].name == "Peanut butter")
+        #expect(results[0].brand == "Example")
+        #expect(results[0].imageURL?.scheme == "https")
+        let unsafeImage = Self.searchFixture.replacingOccurrences(of: "https://images", with: "http://images")
+        #expect(try FoodAPIService.decodeSearch(Data(unsafeImage.utf8))[0].imageURL == nil)
+        #expect(results[1].name == "English name")
+        #expect(try FoodAPIService.decodeSearch(Data(#"{"products":[]}"#.utf8)).isEmpty)
+        #expect(throws: FoodAPIError.self) { try FoodAPIService.decodeSearch(Data("{}".utf8)) }
+        #expect(throws: FoodAPIError.self) { try FoodAPIService.decodeSearch(Data("<html>Unavailable</html>".utf8)) }
+    }
+
+    @Test func submittedSearchEncodesQueryAndLoadsSelectedFood() async throws {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [MockFoodProtocol.self]
+        let session = URLSession(configuration: config)
+        defer { session.invalidateAndCancel() }
+        let service = FoodAPIService(session: session)
+        MockFoodProtocol.status = 200
+        MockFoodProtocol.failure = nil
+        MockFoodProtocol.body = Data(Self.searchFixture.utf8)
+        MockFoodProtocol.request = nil
+        #expect(try await service.search(query: " \n ").isEmpty)
+        #expect(MockFoodProtocol.request == nil)
+        let results = try await service.search(query: "  PB & café + oats  ")
+        let request = try #require(MockFoodProtocol.request)
+        let url = try #require(request.url)
+        let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems
+        #expect(url.path == "/cgi/search.pl")
+        #expect(items?.first { $0.name == "search_terms" }?.value == "PB & café + oats")
+        #expect(items?.first { $0.name == "page_size" }?.value == "25")
+        #expect(request.value(forHTTPHeaderField: "User-Agent") == "Tally/1.0 (\(FoodAPIConfiguration.contact))")
+        MockFoodProtocol.body = Data(Self.fixture.utf8)
+        let food = try await service.lookup(barcode: results[0].barcode)
+        #expect(food.barcode == results[0].barcode)
+        #expect(food.portions.first?.nutrition.isComplete == true)
+    }
+
+    @Test func searchRateLimitAndFailures() async throws {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [MockFoodProtocol.self]
+        let session = URLSession(configuration: config)
+        defer { session.invalidateAndCancel() }
+        MockFoodProtocol.failure = nil
+        MockFoodProtocol.status = 200
+        MockFoodProtocol.body = Data(Self.searchFixture.utf8)
+        let service = FoodAPIService(session: session)
+        for _ in 0..<8 { _ = try await service.search(query: "oats") }
+        do {
+            _ = try await service.search(query: "oats")
+            Issue.record("Expected the search rate guard to reject a ninth request")
+        } catch FoodAPIError.rateLimited { }
+
+        let failing = FoodAPIService(session: session)
+        MockFoodProtocol.status = 503
+        await #expect(throws: FoodAPIError.self) { try await failing.search(query: "oats") }
+        MockFoodProtocol.status = 429
+        await #expect(throws: FoodAPIError.self) { try await failing.search(query: "oats") }
+        MockFoodProtocol.status = 200
+        await #expect(throws: FoodAPIError.self) { try await failing.search(query: "oats") }
+        let cancelled = FoodAPIService(session: session)
+        MockFoodProtocol.failure = URLError(.cancelled)
+        defer { MockFoodProtocol.failure = nil }
+        await #expect(throws: CancellationError.self) { try await cancelled.search(query: "oats") }
+    }
 }
 
 /// Serialized suite prevents concurrent mutation; no network requests leave this URLProtocol.

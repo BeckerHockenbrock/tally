@@ -2,11 +2,13 @@ import SwiftUI
 import SwiftData
 
 struct GoalsView: View {
+    var isTab = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Query private var goals: [MacroGoal]
 
     @State private var saveError: String?
+    @State private var showingSaved = false
     @State private var calorieText: String = ""
     @State private var proteinText: String = ""
     @State private var carbsText: String = ""
@@ -138,9 +140,9 @@ struct GoalsView: View {
 
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        dismiss()
+                if !isTab {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { dismiss() }
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
@@ -160,6 +162,9 @@ struct GoalsView: View {
             .alert("Could Not Save Goals", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
                 Button("OK", role: .cancel) {}
             } message: { Text(saveError ?? "") }
+            .alert("Daily goals saved", isPresented: $showingSaved) {
+                Button("Done", role: .cancel) {}
+            } message: { Text("Your dashboard will use these targets.") }
             .onAppear {
                 loadCurrentGoals()
             }
@@ -210,7 +215,10 @@ struct GoalsView: View {
             modelContext.insert(newGoal)
         }
 
-        do { try modelContext.save(); dismiss() }
+        do {
+            try modelContext.save()
+            if isTab { showingSaved = true } else { dismiss() }
+        }
         catch { modelContext.rollback(); saveError = error.localizedDescription }
     }
 }
