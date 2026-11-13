@@ -59,9 +59,11 @@ actor FoodAPIService {
             URLQueryItem(name: "action", value: "process"),
             URLQueryItem(name: "search_simple", value: "1"),
             URLQueryItem(name: "search_terms", value: terms),
+            // Rank the full matching set before taking the first page of results.
+            URLQueryItem(name: "sort_by", value: "popularity_key"),
             URLQueryItem(name: "json", value: "1"),
             URLQueryItem(name: "page_size", value: "25"),
-            URLQueryItem(name: "fields", value: "code,product_name,product_name_en,brands,image_front_url")
+            URLQueryItem(name: "fields", value: "code,product_name,product_name_en,brands,image_front_url,popularity_key,unique_scans_n")
         ], isSearch: true)
         return try Self.decodeSearch(data)
     }
@@ -121,8 +123,20 @@ actor FoodAPIService {
         let response: Response
         do { response = try JSONDecoder().decode(Response.self, from: data) }
         catch { throw FoodAPIError.malformedResponse }
+        // Search indexes can return scores out of order. Rank the actual returned
+        // scores, preserve ties, and keep the highest-ranked copy of each barcode.
+        let ranked = response.products.enumerated().sorted { left, right in
+            let leftPopularity = left.element.popularity_key?.value ?? 0
+            let rightPopularity = right.element.popularity_key?.value ?? 0
+            if leftPopularity != rightPopularity { return leftPopularity > rightPopularity }
+            let leftScans = left.element.unique_scans_n?.value ?? 0
+            let rightScans = right.element.unique_scans_n?.value ?? 0
+            if leftScans != rightScans { return leftScans > rightScans }
+            return left.offset < right.offset
+        }
         var seen = Set<String>()
-        return response.products.compactMap { product in
+        return ranked.compactMap { item in
+            let product = item.element
             guard let code = product.code, let valid = try? FoodBarcode.validated(code) else { return nil }
             let key = FoodBarcode.cacheKey(valid)
             guard seen.insert(key).inserted else { return nil }
@@ -165,6 +179,8 @@ private struct OFFProduct: Decodable {
     let product_name: String?
     let product_name_en: String?
     let brands: String?
+    let popularity_key: FlexibleNumber?
+    let unique_scans_n: FlexibleNumber?
     let image_front_url: String?
     let serving_size: String?
     let serving_quantity: FlexibleNumber?

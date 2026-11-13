@@ -201,11 +201,34 @@ struct FoodTests {
         #expect(url.path == "/cgi/search.pl")
         #expect(items?.first { $0.name == "search_terms" }?.value == "PB & café + oats")
         #expect(items?.first { $0.name == "page_size" }?.value == "25")
+        #expect(items?.first { $0.name == "sort_by" }?.value == "popularity_key")
+        let fields = items?.first { $0.name == "fields" }?.value?.split(separator: ",") ?? []
+        #expect(fields.contains("popularity_key"))
+        #expect(fields.contains("unique_scans_n"))
         #expect(request.value(forHTTPHeaderField: "User-Agent") == "Tally/1.0 (\(FoodAPIConfiguration.contact))")
         MockFoodProtocol.body = Data(Self.fixture.utf8)
         let food = try await service.lookup(barcode: results[0].barcode)
         #expect(food.barcode == results[0].barcode)
         #expect(food.portions.first?.nutrition.isComplete == true)
+    }
+
+    @Test func searchRanksPopularityAndKeepsStableTies() throws {
+        // Reproduce a live response whose products did not arrive in score order.
+        let json = #"""
+        {"products":[
+          {"code":"12345678","product_name":"Popular food","popularity_key":"300","unique_scans_n":2},
+          {"code":"87654321","product_name":"Less popular food","popularity_key":100,"unique_scans_n":999},
+          {"code":"12345678","product_name":"Lower ranked duplicate","popularity_key":1},
+          {"code":"00000001","product_name":"First tied food","popularity_key":300,"unique_scans_n":"10"},
+          {"code":"00000002","product_name":"Second tied food","popularity_key":300,"unique_scans_n":10},
+          {"code":"00000003","product_name":"Scan count fallback","unique_scans_n":50},
+          {"code":"00000004","product_name":"Invalid score fallback","popularity_key":"NaN","unique_scans_n":20},
+          {"code":"00000005","product_name":"Unranked food","popularity_key":-1}
+        ]}
+        """#
+        let results = try FoodAPIService.decodeSearch(Data(json.utf8))
+        #expect(results.map(\.name) == ["First tied food", "Second tied food", "Popular food",
+                                     "Less popular food", "Scan count fallback", "Invalid score fallback", "Unranked food"])
     }
 
     @Test func searchRateLimitAndFailures() async throws {

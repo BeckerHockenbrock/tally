@@ -215,6 +215,8 @@ struct FoodEntryView: View {
             } else {
                 VStack(alignment: .leading, spacing: 14) {
                     sectionHeading("Search results", detail: "\(searchResults.count) found")
+                    Label("Most popular first", systemImage: "arrow.down")
+                        .font(.caption).foregroundStyle(.secondary)
                     LazyVStack(spacing: 10) {
                         ForEach(searchResults) { result in
                             Button { chooseBarcode(result.barcode) } label: {
