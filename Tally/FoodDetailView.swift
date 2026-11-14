@@ -7,14 +7,14 @@ struct FoodDetailView: View {
     let date: Date
     let followsToday: Bool
     let cacheWarning: String?
-    let onAdded: () -> Void
-    let onManual: () -> Void
+    let onAdded: (Date) -> Void
+    let onManual: (FoodNutrition?) -> Void
     @State private var unit: PortionUnit
     @State private var quantityText: String
     @State private var saveError: String?
     @State private var saved = false
 
-    init(food: Food, date: Date, followsToday: Bool = true, cacheWarning: String? = nil, onAdded: @escaping () -> Void, onManual: @escaping () -> Void) {
+    init(food: Food, date: Date, followsToday: Bool = true, cacheWarning: String? = nil, onAdded: @escaping (Date) -> Void, onManual: @escaping (FoodNutrition?) -> Void) {
         self.food = food
         self.date = date
         self.followsToday = followsToday
@@ -61,11 +61,12 @@ struct FoodDetailView: View {
                     }
                 } header: { TallySectionLabel(text: "Your Portion") }
                 NutritionSummary(nutrition: nutrition)
+                FoodNutrientsSection(nutrition: nutrition)
             }
             if food.portions.isEmpty || nutrition?.isComplete != true {
                 Section {
                     Text("Some nutrition information is missing or uses unsupported units. Missing values are not zero. Check the package and enter the nutrition manually.")
-                    Button("Enter Nutrition Manually", action: onManual)
+                    Button("Enter Nutrition Manually") { onManual(nutrition) }
                 }
             }
             Section {
@@ -78,7 +79,12 @@ struct FoodDetailView: View {
                 .tint(MacroTheme.accent)
                 .disabled(nutrition?.isComplete != true || saved)
             }
-            FoodAttribution(barcode: food.barcode)
+            if food.isBuiltIn {
+                Section {
+                    Link("Data: USDA FoodData Central · SR Legacy (2018)", destination: URL(string: "https://fdc.nal.usda.gov/food-details/" + String(food.barcode.dropFirst(5)) + "/nutrients")!)
+                    Text("Public domain / CC0").font(.caption).foregroundStyle(.secondary)
+                }
+            } else if !food.isCustom { FoodAttribution(barcode: food.barcode) }
 
                 }
                 .listRowBackground(MacroTheme.surface)
@@ -104,12 +110,14 @@ struct FoodDetailView: View {
         entry.energyIsEstimated = nutrition.energyEstimated
         entry.barcode = food.barcode
         entry.portionDescription = "\(quantity.formatted()) \(unit.label.lowercased())"
-        entry.dataSource = "Open Food Facts"
+        entry.dataSource = food.sourceName
         context.insert(entry)
         do {
+            try entry.setNutrition(nutrition)
+            try FoodStore.recordUse(of: food, in: context)
             try context.save()
             saved = true
-            onAdded()
+            onAdded(entry.date)
         } catch { saveError = error.localizedDescription }
     }
 }
@@ -118,22 +126,17 @@ private struct FoodHeader: View {
     let food: Food
     var body: some View {
         Section {
-            if let url = food.imageURL {
-                AsyncImage(url: url) { phase in
-                    if let image = phase.image {
-                        image.resizable().scaledToFit()
-                    } else {
-                        Image(systemName: "photo").font(.largeTitle).foregroundStyle(.secondary)
-                    }
-                }
-                .frame(maxWidth: .infinity).frame(height: 170)
-                .accessibilityLabel("Product photo")
+            HStack(spacing: 14) {
+                FoodIconView(emoji: food.cartoonIcon)
+                Text(food.name).font(.title2.bold())
             }
-            Text(food.name).font(.title2.bold())
             if let brand = food.brand, !brand.isEmpty { Text(brand).foregroundStyle(.secondary) }
-            LabeledContent("Barcode", value: food.barcode)
-            LabeledContent("Package serving", value: food.servingSize ?? "Not provided")
-            Text("Nutrition is for the product as sold. Compare it with your package.")
+            if !food.isBuiltIn && !food.isCustom { LabeledContent("Barcode", value: food.barcode) }
+            if let preparation = food.preparation {
+                LabeledContent("Weigh it", value: preparation)
+            }
+            if let serving = food.servingSize { LabeledContent("One serving", value: serving) }
+            Text(food.isBuiltIn ? "Use the preparation shown above when weighing your portion." : "Compare scanned products with your package.")
                 .font(.caption).foregroundStyle(.secondary)
         }
     }

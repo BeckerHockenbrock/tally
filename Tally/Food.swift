@@ -1,14 +1,5 @@
 import Foundation
 
-/// Search returns identity only; nutrition is loaded through the normal cached lookup.
-struct FoodSearchResult: Identifiable, Hashable {
-    var id: String { barcode }
-    let barcode: String
-    let name: String
-    let brand: String?
-    let imageURL: URL?
-}
-
 /// Database definitions are values, independent of persisted diary snapshots.
 struct Food: Codable, Identifiable, Hashable {
     var id: String { barcode }
@@ -18,6 +9,17 @@ struct Food: Codable, Identifiable, Hashable {
     let imageURL: URL?
     let servingSize: String?
     let portions: [FoodPortion]
+    var source: String? = nil
+    var icon: String? = nil
+    var preparation: String? = nil
+    var sourceDescription: String? = nil
+
+    var cartoonIcon: String { icon ?? FoodEmoji.forName(name) }
+    var subtitle: String { preparation ?? brand ?? (isCustom ? "Your food" : "Saved food") }
+
+    var isBuiltIn: Bool { barcode.hasPrefix("usda:") }
+    var isCustom: Bool { source == "Manual" }
+    var sourceName: String { source ?? "Open Food Facts" }
 }
 
 struct FoodPortion: Codable, Identifiable, Hashable {
@@ -45,6 +47,7 @@ struct FoodNutrition: Codable, Hashable {
     let carbs: Double?
     let fat: Double?
     var energyEstimated = false
+    var nutrients: [String: NutrientAmount]? = nil
 
     var isComplete: Bool {
         [calories, protein, carbs, fat].allSatisfy { value in
@@ -57,8 +60,15 @@ struct FoodNutrition: Codable, Hashable {
         guard quantity.isFinite, quantity > 0 else { return nil }
         let values = [calories, protein, carbs, fat].map { $0.map { $0 * quantity } }
         guard values.compactMap({ $0 }).allSatisfy({ $0.isFinite && $0 >= 0 }) else { return nil }
+        var scaledNutrients: [String: NutrientAmount] = [:]
+        for (key, nutrient) in nutrients ?? [:] {
+            var scaled = nutrient
+            scaled.amount *= quantity
+            guard scaled.amount.isFinite, scaled.amount >= 0 else { return nil }
+            scaledNutrients[key] = scaled
+        }
         return FoodNutrition(calories: values[0], protein: values[1], carbs: values[2],
-                             fat: values[3], energyEstimated: energyEstimated)
+                             fat: values[3], energyEstimated: energyEstimated, nutrients: scaledNutrients)
     }
 }
 
@@ -105,5 +115,30 @@ struct BarcodeScanGate {
         guard !accepted, (try? FoodBarcode.validated(barcode)) != nil else { return false }
         accepted = true
         return true
+    }
+}
+
+/// Native emoji give every food a small, offline illustration, including custom foods.
+enum FoodEmoji {
+    static func forName(_ name: String) -> String {
+        let lower = name.lowercased()
+        let matches: [(String, String)] = [
+            ("pasta", "🍝"), ("spaghetti", "🍝"), ("rice", "🍚"),
+            ("chicken", "🍗"), ("beef", "🥩"), ("steak", "🥩"),
+            ("salmon", "🐟"), ("tuna", "🐟"), ("fish", "🐟"), ("shrimp", "🦐"),
+            ("egg", "🥚"), ("bread", "🍞"), ("oat", "🥣"), ("yogurt", "🥣"),
+            ("cheese", "🧀"), ("milk", "🥛"), ("banana", "🍌"), ("pineapple", "🍍"), ("apple", "🍎"),
+            ("orange", "🍊"), ("strawberr", "🍓"), ("blueberr", "🫐"),
+            ("grape", "🍇"), ("avocado", "🥑"), ("pear", "🍐"),
+            ("watermelon", "🍉"), ("broccoli", "🥦"),
+            ("carrot", "🥕"), ("spinach", "🥬"), ("lettuce", "🥬"),
+            ("tomato", "🍅"), ("cucumber", "🥒"), ("onion", "🧅"),
+            ("pepper", "🫑"), ("mushroom", "🍄"), ("sweet potato", "🍠"),
+            ("potato", "🥔"), ("bean", "🫘"), ("chickpea", "🫘"), ("lentil", "🫘"),
+            ("almond", "🥜"), ("walnut", "🥜"), ("cashew", "🥜"), ("peanut", "🥜"),
+            ("olive", "🫒"), ("butter", "🧈"), ("honey", "🍯"),
+            ("sugar", "🍬"), ("salt", "🧂"), ("water", "💧")
+        ]
+        return matches.first { lower.contains($0.0) }?.1 ?? "🍽️"
     }
 }

@@ -162,9 +162,23 @@ struct GoalsView: View {
             .alert("Could Not Save Goals", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
                 Button("OK", role: .cancel) {}
             } message: { Text(saveError ?? "") }
-            .alert("Daily goals saved", isPresented: $showingSaved) {
-                Button("Done", role: .cancel) {}
-            } message: { Text("Your dashboard will use these targets.") }
+            .safeAreaInset(edge: .bottom) {
+                if showingSaved {
+                    Label("Goals saved", systemImage: "checkmark.circle.fill")
+                        .font(.subheadline.weight(.medium)).padding(16)
+                        .frame(maxWidth: .infinity).background(MacroTheme.surface)
+                        .accessibilityAddTraits(.updatesFrequently)
+                }
+            }
+            .sensoryFeedback(.success, trigger: showingSaved) { _, isSaved in isSaved }
+            .task(id: showingSaved) {
+                guard showingSaved else { return }
+                UIAccessibility.post(notification: .announcement, argument: "Goals saved")
+                try? await Task.sleep(for: .seconds(4))
+                guard !Task.isCancelled else { return }
+                showingSaved = false
+            }
+            .onChange(of: calorieText + proteinText + carbsText + fatText) { _, _ in showingSaved = false }
             .onAppear {
                 loadCurrentGoals()
             }

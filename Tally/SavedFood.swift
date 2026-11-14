@@ -7,17 +7,25 @@ final class SavedFood {
     var name: String
     var payload: Data
     var fetchedAt: Date
+    /// First scan, then the most recent time actually added to the diary. Viewing never renews it.
     var lastUsedAt: Date
 
-    init(food: Food) throws {
+    init(food: Food, now: Date = Date()) throws {
         barcode = food.barcode
         name = food.name
         payload = try JSONEncoder().encode(food)
-        fetchedAt = Date()
-        lastUsedAt = Date()
+        fetchedAt = now
+        lastUsedAt = now
     }
 
     var food: Food? { try? JSONDecoder().decode(Food.self, from: payload) }
+    var isCustom: Bool { food?.isCustom == true }
+
+    func isExpired(at now: Date, calendar: Calendar = .current) -> Bool {
+        guard !isCustom else { return false }
+        guard let expiry = calendar.date(byAdding: .month, value: 3, to: lastUsedAt) else { return false }
+        return expiry <= now
+    }
 }
 
 struct FoodLookup {
@@ -25,48 +33,40 @@ struct FoodLookup {
     let warning: String?
 }
 
-/// Cache writes use their own context and never block logging usable nutrition.
 @MainActor
 struct FoodStore {
-    static let cacheLifetime: TimeInterval = 7 * 24 * 60 * 60
     let container: ModelContainer
     var fetchFood: (String) async throws -> Food = { try await FoodAPIService.shared.lookup(barcode: $0) }
     var saveCache: (ModelContext) throws -> Void = { try $0.save() }
+    var now: () -> Date = { Date() }
+
+    func removeExpired() throws {
+        let context = ModelContext(container)
+        for saved in try context.fetch(FetchDescriptor<SavedFood>()) where saved.isExpired(at: now()) {
+            context.delete(saved)
+        }
+        if context.hasChanges { try saveCache(context) }
+    }
 
     func lookup(_ input: String, refresh: Bool = false) async throws -> FoodLookup {
         let code = FoodBarcode.cacheKey(try FoodBarcode.validated(input))
+        try removeExpired()
         let context = ModelContext(container)
         let descriptor = FetchDescriptor<SavedFood>(predicate: #Predicate { $0.barcode == code })
         let existing = try context.fetch(descriptor).first
-        let cachedFood = existing?.food
-        if !refresh, let existing, let food = cachedFood,
-           Date().timeIntervalSince(existing.fetchedAt) < Self.cacheLifetime {
-            existing.lastUsedAt = Date()
-            // This timestamp is only used to order the recent-food list.
-            try? saveCache(context)
+        if !refresh, let food = existing?.food {
             return FoodLookup(food: food, warning: nil)
         }
-
-        let food: Food
-        do {
-            food = try await fetchFood(code)
-            try Task.checkCancellation()
-        } catch {
-            try Task.checkCancellation()
-            // Explicit refresh must report failures, not imply a successful update.
-            guard !refresh, let cachedFood, let existing, canUseOfflineCache(after: error) else { throw error }
-            return FoodLookup(food: cachedFood,
-                warning: "Using nutrition saved on \(existing.fetchedAt.formatted(date: .abbreviated, time: .omitted)). Refresh failed. Check the package before logging.")
-        }
-
+        let food = try await fetchFood(code)
+        try Task.checkCancellation()
         do {
             if let existing {
                 existing.payload = try JSONEncoder().encode(food)
                 existing.name = food.name
-                existing.fetchedAt = Date()
-                existing.lastUsedAt = Date()
+                existing.fetchedAt = now()
+                // A refresh does not count as eating this food.
             } else {
-                context.insert(try SavedFood(food: food))
+                context.insert(try SavedFood(food: food, now: now()))
             }
             try saveCache(context)
             return FoodLookup(food: food, warning: nil)
@@ -76,13 +76,21 @@ struct FoodStore {
         }
     }
 
-    private func canUseOfflineCache(after error: Error) -> Bool {
-        if let error = error as? URLError { return error.code != .cancelled }
-        guard let error = error as? FoodAPIError else { return false }
-        switch error {
-        case .network, .timeout, .rateLimited: return true
-        case .server(let status): return status >= 500
-        default: return false
-        }
+    /// Called in the diary's transaction so a failed log cannot extend retention.
+    static func recordUse(of food: Food, in context: ModelContext, now: Date = Date()) throws {
+        guard !food.isBuiltIn else { return }
+        let code = food.barcode
+        let existing = try context.fetch(FetchDescriptor<SavedFood>(predicate: #Predicate { $0.barcode == code })).first
+        if let existing { existing.lastUsedAt = now }
+        else { context.insert(try SavedFood(food: food, now: now)) }
+    }
+
+    static func saveCustom(_ food: Food, in context: ModelContext) throws {
+        let code = food.barcode
+        if let saved = try context.fetch(FetchDescriptor<SavedFood>(predicate: #Predicate { $0.barcode == code })).first {
+            saved.payload = try JSONEncoder().encode(food)
+            saved.name = food.name
+            saved.lastUsedAt = Date()
+        } else { context.insert(try SavedFood(food: food)) }
     }
 }

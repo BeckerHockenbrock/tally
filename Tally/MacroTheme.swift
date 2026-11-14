@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import SwiftData
 
 enum MacroTheme {
     static let background = Color(uiColor: .systemGroupedBackground)
@@ -112,5 +113,93 @@ extension View {
         background(MacroTheme.background)
             .font(MacroTheme.bodyFont)
             .tint(MacroTheme.accent)
+    }
+}
+
+
+@MainActor
+final class TallyFeedback: ObservableObject {
+    @Published var message: String?
+    @Published var deletedEntry: EntrySnapshot?
+    @Published var successCount = 0
+    private var dismissal: Task<Void, Never>?
+
+    func confirm(_ text: String) {
+        dismissal?.cancel()
+        message = text
+        successCount += 1
+        UIAccessibility.post(notification: .announcement, argument: text)
+        dismissal = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(4))
+            guard !Task.isCancelled else { return }
+            self?.message = nil
+        }
+    }
+
+    func added(on date: Date) {
+        confirm(Calendar.current.isDateInToday(date) ? "Added to Today" : "Added to " + date.formatted(date: .abbreviated, time: .omitted))
+    }
+
+    func delete(_ entry: MacroEntry, in context: ModelContext) throws {
+        let snapshot = EntrySnapshot(entry)
+        context.delete(entry)
+        do { try context.save() }
+        catch { context.rollback(); throw error }
+        deletedEntry = snapshot
+        UIAccessibility.post(notification: .announcement, argument: "Entry deleted. Undo available.")
+    }
+
+    func undo(in context: ModelContext) throws {
+        guard let deletedEntry else { return }
+        context.insert(deletedEntry.restore())
+        do { try context.save() }
+        catch { context.rollback(); throw error }
+        self.deletedEntry = nil
+        confirm("Entry restored")
+    }
+}
+
+struct TallyFeedbackBanner: View {
+    @EnvironmentObject private var feedback: TallyFeedback
+    @Environment(\.modelContext) private var context
+    @State private var errorMessage: String?
+
+    var body: some View {
+        VStack(spacing: 8) {
+            if let message = feedback.message {
+                Label(message, systemImage: "checkmark.circle.fill")
+                    .font(.subheadline.weight(.medium))
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(16).tallyPanel()
+            }
+            if feedback.deletedEntry != nil {
+                ViewThatFits(in: .horizontal) {
+                    HStack { Text("Entry deleted"); Spacer(); undoButton; closeButton }
+                    VStack(alignment: .leading) {
+                        Text("Entry deleted")
+                        HStack { undoButton; Spacer(); closeButton }
+                    }
+                }
+                .font(.subheadline.weight(.medium)).padding(.horizontal, 16).padding(.vertical, 4).tallyPanel()
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, feedback.message != nil || feedback.deletedEntry != nil ? 8 : 0)
+        .frame(maxWidth: 640)
+        .sensoryFeedback(.success, trigger: feedback.successCount)
+        .alert("Could Not Restore Entry", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: { Text(errorMessage ?? "") }
+    }
+
+    private var undoButton: some View {
+        Button("Undo") {
+            do { try feedback.undo(in: context) }
+            catch { errorMessage = error.localizedDescription }
+        }.frame(minWidth: 44, minHeight: 44)
+    }
+    private var closeButton: some View {
+        Button { feedback.deletedEntry = nil } label: {
+            Image(systemName: "xmark").frame(width: 44, height: 44)
+        }.accessibilityLabel("Dismiss undo")
     }
 }

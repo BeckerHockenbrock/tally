@@ -3,6 +3,7 @@ import SwiftData
 
 struct AddEditEntryView: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var feedback: TallyFeedback
     @Environment(\.modelContext) private var modelContext
 
     var entryToEdit: MacroEntry?
@@ -10,9 +11,29 @@ struct AddEditEntryView: View {
     var initialBarcode: String?
     var initialName: String
     var onSaved: (() -> Void)?
+    var initialNutrition: FoodNutrition?
     @State private var caloriesText = ""
     @State private var saveError: String?
     @State private var initialized = false
+    @State private var nutrientTexts: [String: String] = [:]
+    @State private var originalNutrients: [String: NutrientAmount] = [:]
+    @State private var saveToFoods = false
+
+    private var nutrientDefinitions: [NutrientDefinition] { NutrientDefinition.including(originalNutrients) }
+
+    private var enteredNutrients: [String: NutrientAmount] {
+        var result: [String: NutrientAmount] = [:]
+        for definition in nutrientDefinitions {
+            guard let text = nutrientTexts[definition.id], !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
+            let value = parseInput(text)
+            if let original = originalNutrients[definition.id], original.amount == value {
+                result[definition.id] = original
+            } else {
+                result[definition.id] = NutrientAmount(name: definition.name, unit: definition.unit, amount: value, source: "Manual")
+            }
+        }
+        return result
+    }
 
     @State private var name: String = ""
     @State private var proteinText: String = ""
@@ -27,12 +48,13 @@ struct AddEditEntryView: View {
     }
 
     init(entryToEdit: MacroEntry? = nil, initialDate: Date = Date(), initialBarcode: String? = nil,
-         initialName: String = "", onSaved: (() -> Void)? = nil) {
+         initialName: String = "", onSaved: (() -> Void)? = nil, initialNutrition: FoodNutrition? = nil) {
         self.entryToEdit = entryToEdit
         self.initialDate = initialDate
         self.initialBarcode = initialBarcode
         self.initialName = initialName
         self.onSaved = onSaved
+        self.initialNutrition = initialNutrition
     }
 
     private var proteinValue: Double {
@@ -61,7 +83,12 @@ struct AddEditEntryView: View {
         } ?? false)
         // Barcode fallback requires explicit values, including explicit zeros.
         let explicit = (initialBarcode == nil || macros.allSatisfy { !$0.isEmpty })
-        return valid && energyValid && explicit && (proteinValue > 0 || carbsValue > 0 || fatValue > 0 || !caloriesText.isEmpty)
+        let nutrientsValid = nutrientTexts.values.allSatisfy { text in
+            let cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: ",", with: ".")
+            return cleaned.isEmpty || (Double(cleaned).map { $0.isFinite && $0 >= 0 && $0 <= 1_000_000_000 } ?? false)
+        }
+        let namedFood = !saveToFoods || !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        return valid && energyValid && explicit && nutrientsValid && namedFood && (proteinValue > 0 || carbsValue > 0 || fatValue > 0 || !caloriesText.isEmpty)
     }
 
     var body: some View {
@@ -207,6 +234,33 @@ struct AddEditEntryView: View {
                     Text("Label calories override the macro estimate. When editing nutrition, update calories too or clear this field to use the estimate. For a scanned food, enter every macro, including zero.")
                 }
 
+                Section {
+                    DisclosureGroup("Vitamins, minerals & more") {
+                        ForEach(nutrientDefinitions) { definition in
+                            HStack {
+                                Text(definition.name)
+                                Spacer()
+                                TextField("Unknown", text: Binding(
+                                    get: { nutrientTexts[definition.id] ?? "" },
+                                    set: { nutrientTexts[definition.id] = $0 }))
+                                    .keyboardType(.decimalPad).multilineTextAlignment(.trailing).frame(maxWidth: 100)
+                                    .accessibilityLabel(definition.name)
+                                Text(definition.unit).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                } footer: { Text("Amounts are for this entire diary entry. Leave unavailable values blank; enter 0 only when known.") }
+
+                if entryToEdit == nil {
+                    Section {
+                        Toggle("Save to my foods", isOn: $saveToFoods)
+                        if saveToFoods {
+                            Text("This whole entry becomes one serving. Give it a name to reuse it offline.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+
                 if entryToEdit != nil {
                     Section {
                         Button(role: .destructive) {
@@ -292,13 +346,24 @@ struct AddEditEntryView: View {
     private func populateInitialData() {
         if let entry = entryToEdit {
             name = entry.name
-            caloriesText = entry.reportedCalories.map { String($0) } ?? ""
+            caloriesText = entry.energyIsEstimated == true ? "" : (entry.reportedCalories.map { String($0) } ?? "")
+            originalNutrients = entry.nutrition.nutrients ?? [:]
+            nutrientTexts = originalNutrients.mapValues { String($0.amount) }
             proteinText = String(entry.protein)
             carbsText = String(entry.carbs)
             fatText = String(entry.fat)
             entryDate = entry.date
         } else {
             name = initialName
+            saveToFoods = initialBarcode != nil
+            if let nutrition = initialNutrition {
+                caloriesText = nutrition.energyEstimated ? "" : (nutrition.calories.map(String.init(describing:)) ?? "")
+                proteinText = nutrition.protein.map(String.init(describing:)) ?? ""
+                carbsText = nutrition.carbs.map(String.init(describing:)) ?? ""
+                fatText = nutrition.fat.map(String.init(describing:)) ?? ""
+                originalNutrients = nutrition.nutrients ?? [:]
+                nutrientTexts = originalNutrients.mapValues { String($0.amount) }
+            }
             let calendar = Calendar.current
             if calendar.isDateInToday(initialDate) {
                 entryDate = Date()
@@ -320,36 +385,37 @@ struct AddEditEntryView: View {
         let f = fatValue
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        if let entry = entryToEdit {
-            if entry.protein != p || entry.carbs != c || entry.fat != f ||
-                entry.reportedCalories != (caloriesText.isEmpty ? nil : parseInput(caloriesText)) {
-                entry.portionDescription = nil
-                entry.dataSource = "Manual edit"
-                entry.energyIsEstimated = caloriesText.isEmpty
-            }
-            entry.reportedCalories = caloriesText.isEmpty ? nil : parseInput(caloriesText)
-            entry.name = trimmedName
-            entry.protein = p
-            entry.carbs = c
-            entry.fat = f
-            entry.date = entryDate
-        } else {
-            let newEntry = MacroEntry(
-                name: trimmedName,
-                protein: p,
-                carbs: c,
-                fat: f,
-                date: entryDate
-            )
-            newEntry.barcode = initialBarcode
-            newEntry.reportedCalories = caloriesText.isEmpty ? nil : parseInput(caloriesText)
-            newEntry.energyIsEstimated = caloriesText.isEmpty
-            newEntry.dataSource = "Manual"
-            modelContext.insert(newEntry)
+        let nutrition = FoodNutrition(calories: caloriesText.isEmpty ? calculatedCalories : parseInput(caloriesText),
+                                      protein: p, carbs: c, fat: f, energyEstimated: caloriesText.isEmpty,
+                                      nutrients: enteredNutrients)
+        let entry = entryToEdit ?? MacroEntry()
+        if entryToEdit == nil { modelContext.insert(entry) }
+        let nutritionChanged = entryToEdit == nil || entry.protein != p || entry.carbs != c || entry.fat != f ||
+            (entry.nutrition.nutrients ?? [:]) != enteredNutrients || entry.calories != nutrition.calories
+        entry.name = trimmedName
+        entry.date = entryDate
+        if nutritionChanged {
+            entry.portionDescription = nil
+            entry.dataSource = entryToEdit == nil ? "Manual" : "Manual edit"
         }
+        entry.barcode = entry.barcode ?? initialBarcode
 
         do {
+            try entry.setNutrition(nutrition)
+            if entryToEdit == nil && saveToFoods {
+                let code = initialBarcode.map(FoodBarcode.cacheKey) ?? "custom:" + UUID().uuidString
+                let food = Food(barcode: code, name: trimmedName, brand: nil, imageURL: nil,
+                                servingSize: "1 serving = this entry", portions: [FoodPortion(unit: .servings, nutrition: nutrition)], source: "Manual")
+                try FoodStore.saveCustom(food, in: modelContext)
+                entry.barcode = code
+            }
+            if entryToEdit == nil, let code = entry.barcode {
+                let saved = try modelContext.fetch(FetchDescriptor<SavedFood>(predicate: #Predicate { $0.barcode == code })).first
+                saved?.lastUsedAt = Date()
+            }
             try modelContext.save()
+            if entryToEdit == nil { feedback.added(on: entry.date) }
+            else { feedback.confirm("Entry updated") }
             dismiss()
             onSaved?()
         } catch {

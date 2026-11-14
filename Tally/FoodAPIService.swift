@@ -24,14 +24,13 @@ enum FoodAPIConfiguration {
     static let baseURL = "https://world.openfoodfacts.org"
 }
 
-/// Limits product requests to 15/minute and submitted searches to 8/minute per process.
+/// Only barcode lookups use the network; normal food search is entirely local.
 actor FoodAPIService {
     static let shared = FoodAPIService()
     private let session: URLSession
     private let contact: String
     private let baseURL: String
     private var requestDates: [Date] = []
-    private var searchDates: [Date] = []
     private var retryAfter: Date?
 
     init(session: URLSession = .shared, contact: String = FoodAPIConfiguration.contact,
@@ -45,39 +44,19 @@ actor FoodAPIService {
         let code = try FoodBarcode.validated(barcode)
         let data = try await request(path: "api/v3.6/product/\(code).json", queryItems: [
             URLQueryItem(name: "fields", value:
-                "code,product_name,product_name_en,brands,image_front_url,serving_size,serving_quantity,serving_quantity_unit,nutrition")
+                "code,product_name,product_name_en,brands,serving_size,serving_quantity,serving_quantity_unit,nutrition")
         ])
         return try Self.decode(data, requestedBarcode: code)
     }
 
-    func search(query: String) async throws -> [FoodSearchResult] {
-        let terms = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !terms.isEmpty else { return [] }
-        // The product v2/v3 APIs do not support full-text search. Use the documented
-        // keyword endpoint for discovery, then v3.6 for the selected food's nutrition.
-        let data = try await request(path: "cgi/search.pl", queryItems: [
-            URLQueryItem(name: "action", value: "process"),
-            URLQueryItem(name: "search_simple", value: "1"),
-            URLQueryItem(name: "search_terms", value: terms),
-            // Rank the full matching set before taking the first page of results.
-            URLQueryItem(name: "sort_by", value: "popularity_key"),
-            URLQueryItem(name: "json", value: "1"),
-            URLQueryItem(name: "page_size", value: "25"),
-            URLQueryItem(name: "fields", value: "code,product_name,product_name_en,brands,image_front_url,popularity_key,unique_scans_n")
-        ], isSearch: true)
-        return try Self.decodeSearch(data)
-    }
-
-    private func request(path: String, queryItems: [URLQueryItem], isSearch: Bool = false) async throws -> Data {
+    private func request(path: String, queryItems: [URLQueryItem]) async throws -> Data {
         try Task.checkCancellation()
         guard !contact.contains("REPLACE_"), contact.contains("@"),
               !contact.contains("\n"), !contact.contains("\r") else { throw FoodAPIError.configuration }
         let now = Date()
         if let retryAfter, retryAfter > now { throw FoodAPIError.rateLimited(retryAfter) }
         requestDates.removeAll { now.timeIntervalSince($0) >= 60 }
-        searchDates.removeAll { now.timeIntervalSince($0) >= 60 }
-        let dates = isSearch ? searchDates : requestDates
-        if dates.count >= (isSearch ? 8 : 15), let first = dates.first {
+        if requestDates.count >= 15, let first = requestDates.first {
             throw FoodAPIError.rateLimited(first.addingTimeInterval(60))
         }
         guard let baseURL = URL(string: baseURL), baseURL.scheme == "https" else { throw FoodAPIError.configuration }
@@ -91,7 +70,7 @@ actor FoodAPIService {
         if baseURL.host == "world.openfoodfacts.net" {
             request.setValue("Basic " + Data("off:off".utf8).base64EncodedString(), forHTTPHeaderField: "Authorization")
         }
-        if isSearch { searchDates.append(now) } else { requestDates.append(now) }
+        requestDates.append(now)
         do {
             let (data, response) = try await session.data(for: request)
             try Task.checkCancellation()
@@ -115,33 +94,6 @@ actor FoodAPIService {
             if error.code == .cancelled { throw CancellationError() }
             if error.code == .timedOut { throw FoodAPIError.timeout }
             throw FoodAPIError.network(error.localizedDescription)
-        }
-    }
-
-    static func decodeSearch(_ data: Data) throws -> [FoodSearchResult] {
-        struct Response: Decodable { let products: [OFFProduct] }
-        let response: Response
-        do { response = try JSONDecoder().decode(Response.self, from: data) }
-        catch { throw FoodAPIError.malformedResponse }
-        // Search indexes can return scores out of order. Rank the actual returned
-        // scores, preserve ties, and keep the highest-ranked copy of each barcode.
-        let ranked = response.products.enumerated().sorted { left, right in
-            let leftPopularity = left.element.popularity_key?.value ?? 0
-            let rightPopularity = right.element.popularity_key?.value ?? 0
-            if leftPopularity != rightPopularity { return leftPopularity > rightPopularity }
-            let leftScans = left.element.unique_scans_n?.value ?? 0
-            let rightScans = right.element.unique_scans_n?.value ?? 0
-            if leftScans != rightScans { return leftScans > rightScans }
-            return left.offset < right.offset
-        }
-        var seen = Set<String>()
-        return ranked.compactMap { item in
-            let product = item.element
-            guard let code = product.code, let valid = try? FoodBarcode.validated(code) else { return nil }
-            let key = FoodBarcode.cacheKey(valid)
-            guard seen.insert(key).inserted else { return nil }
-            let food = product.food(barcode: key)
-            return FoodSearchResult(barcode: key, name: food.name, brand: food.brand, imageURL: food.imageURL)
         }
     }
 
@@ -179,8 +131,6 @@ private struct OFFProduct: Decodable {
     let product_name: String?
     let product_name_en: String?
     let brands: String?
-    let popularity_key: FlexibleNumber?
-    let unique_scans_n: FlexibleNumber?
     let image_front_url: String?
     let serving_size: String?
     let serving_quantity: FlexibleNumber?
@@ -238,6 +188,46 @@ private struct OFFNutrientSet: Decodable {
     let source: String?
     let nutrients: [String: OFFNutrient]?
 
+    var additionalNutrients: [String: NutrientAmount] {
+        var result: [String: NutrientAmount] = [:]
+        let core = Set(["proteins", "carbohydrates", "carbohydrates-total", "fat", "energy", "energy-kcal", "energy-kj"])
+        for (rawKey, nutrient) in nutrients ?? [:] where !core.contains(rawKey) {
+            guard let value = nutrient.amount, let rawUnit = nutrient.unit else { continue }
+            let aliases = ["vitamin-b3": "vitamin-pp", "vitamin-b5": "pantothenic-acid", "vitamin-b7": "biotin", "vitamin-b9": "folates"]
+            var key = aliases[rawKey] ?? rawKey
+            let definition = NutrientDefinition.common.first { $0.id == key }
+            var unit = rawUnit.lowercased()
+            if ["ug", "μg", "mcg"].contains(unit) { unit = "µg" }
+            var amount = value
+            if let definition, let grams = nutrient.grams {
+                unit = definition.unit
+                switch unit {
+                case "g": amount = grams
+                case "mg": amount = grams * 1_000
+                case "µg": amount = grams * 1_000_000
+                default: continue
+                }
+            } else if let definition, unit != definition.unit {
+                // Preserve IU separately; converting vitamin A IU needs its chemical form.
+                guard unit == "iu" else { continue }
+                key += "-iu"
+                unit = "IU"
+            } else if let grams = nutrient.grams {
+                // Unknown mass nutrients also need a stable unit across products.
+                unit = "g"
+                amount = grams
+            } else {
+                guard unit == "iu" else { continue }
+                unit = "IU"
+            }
+            guard amount.isFinite, amount >= 0 else { continue }
+            let name = definition?.name ?? rawKey.replacingOccurrences(of: "-", with: " ").capitalized
+            result[key] = NutrientAmount(name: name + (key.hasSuffix("-iu") ? " (IU)" : ""),
+                                        unit: unit, amount: amount, source: "Open Food Facts")
+        }
+        return result
+    }
+
     var values: FoodNutrition {
         let p = nutrients?["proteins"]?.grams
         let c = nutrients?["carbohydrates-total"]?.grams ?? nutrients?["carbohydrates"]?.grams
@@ -248,7 +238,8 @@ private struct OFFNutrientSet: Decodable {
         let energy = energyNutrient?.kilocalories
         let estimate: Double? = if let p, let c, let f { p * 4 + c * 4 + f * 9 } else { nil }
         return FoodNutrition(calories: energy ?? estimate, protein: p, carbs: c, fat: f,
-                             energyEstimated: energy == nil || energyNutrient?.source == "estimate" || source == "estimate")
+                             energyEstimated: energy == nil || energyNutrient?.source == "estimate" || source == "estimate",
+                             nutrients: additionalNutrients)
     }
 }
 
@@ -269,7 +260,7 @@ private struct OFFNutrient: Decodable {
         switch unit?.lowercased() {
         case "g": return amount
         case "mg": return amount / 1000
-        case "µg", "μg", "ug": return amount / 1_000_000
+        case "µg", "μg", "ug", "mcg": return amount / 1_000_000
         case "kg": return amount * 1000
         default: return nil
         }

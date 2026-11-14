@@ -68,7 +68,7 @@ struct RegressionTests {
                         imageURL: nil, servingSize: nil, portions: [])
         let context = ModelContext(container)
         let saved = try SavedFood(food: food)
-        if expired { saved.fetchedAt = Date().addingTimeInterval(-FoodStore.cacheLifetime - 10) }
+        if expired { saved.lastUsedAt = Calendar.current.date(byAdding: .month, value: -4, to: Date())! }
         context.insert(saved)
         try context.save()
         return (container, food)
@@ -88,17 +88,17 @@ struct RegressionTests {
         #expect(try context.fetch(FetchDescriptor<SavedFood>()).first?.food?.name == "Updated")
     }
 
-    @Test @MainActor func expiredCacheWorksOfflineWithWarningButRefreshReportsFailure() async throws {
-        let (container, _) = try cachedStore(expired: true)
+    @Test @MainActor func activeCacheWorksOfflineAndExpiredFoodRequiresLookup() async throws {
+        let (container, _) = try cachedStore(expired: false)
         let offline = FoodStore(container: container, fetchFood: { _ in throw URLError(.notConnectedToInternet) })
         let result = try await offline.lookup("012345678905")
         #expect(result.food.name == "Saved")
-        #expect(result.warning != nil)
+        #expect(result.warning == nil)
         await #expect(throws: URLError.self) { try await offline.lookup("012345678905", refresh: true) }
-        let deleted = FoodStore(container: container, fetchFood: { _ in throw FoodAPIError.notFound })
-        await #expect(throws: FoodAPIError.self) { try await deleted.lookup("012345678905") }
-        let cancelled = FoodStore(container: container, fetchFood: { _ in throw CancellationError() })
-        await #expect(throws: CancellationError.self) { try await cancelled.lookup("012345678905") }
+        let (expiredContainer, _) = try cachedStore(expired: true)
+        let expiredOffline = FoodStore(container: expiredContainer, fetchFood: { _ in throw URLError(.notConnectedToInternet) })
+        await #expect(throws: URLError.self) { try await expiredOffline.lookup("012345678905") }
+        #expect(try ModelContext(expiredContainer).fetch(FetchDescriptor<SavedFood>()).isEmpty)
     }
 
     @Test @MainActor func cacheWriteFailuresDoNotBlockUsableFood() async throws {

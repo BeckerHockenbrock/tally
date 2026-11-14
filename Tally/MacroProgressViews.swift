@@ -52,8 +52,12 @@ struct EnergySummaryView: View {
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(consumed > goal ? Color.red : Color.secondary)
         }
-        .padding(20)
+        .padding(24)
         .tallyPanel()
+        .overlay(alignment: .top) {
+            RoundedRectangle(cornerRadius: 2).fill(MacroTheme.calories.opacity(0.65))
+                .frame(width: 40, height: 3).padding(.top, 10).accessibilityHidden(true)
+        }
     }
 }
 

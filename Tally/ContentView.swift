@@ -3,6 +3,11 @@ import SwiftData
 
 struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.modelContext) private var modelContext
+    @StateObject private var feedback = TallyFeedback()
+    @State private var todayDate = Date()
+    @State private var startingFood: Food?
+    @State private var cleanupError: String?
     @State private var selectedDate = Date()
     @State private var followsToday = true
     @State private var calendar = Calendar.current
@@ -13,7 +18,7 @@ struct ContentView: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            DiaryDayView(selectedDate: $selectedDate, calendar: calendar)
+            DiaryDayView(selectedDate: $todayDate, calendar: calendar)
                 .tag(TallyTab.today)
                 .tabItem { Label("Today", systemImage: "square.grid.2x2") }
                 .toolbar(.hidden, for: .tabBar)
@@ -31,41 +36,60 @@ struct ContentView: View {
                 .toolbar(.hidden, for: .tabBar)
         }
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                TallyBottomBar(selection: $selectedTab) { showingAddMenu = true }
+                VStack(spacing: 0) {
+                    TallyFeedbackBanner()
+                    TallyBottomBar(selection: $selectedTab) { showingAddMenu = true }
+                }
             }
             .sheet(isPresented: $showingAddMenu, onDismiss: {
                 foodMode = pendingFoodMode
                 pendingFoodMode = nil
             }) {
-                AddFoodMenu(date: foodDate) { mode in
+                AddFoodMenu(date: foodDate, onRecent: { food in
+                    startingFood = food
+                    pendingFoodMode = .search
+                    showingAddMenu = false
+                }) { mode in
+                    startingFood = nil
                     pendingFoodMode = mode
                     showingAddMenu = false
                 }
                 .tallySheet()
             }
-            .sheet(item: $foodMode) { mode in
-                FoodEntryView(initialDate: foodDate, followsToday: calendar.isDateInToday(foodDate), initialMode: mode)
+            .sheet(item: $foodMode, onDismiss: { startingFood = nil }) { mode in
+                FoodEntryView(initialDate: foodDate, followsToday: calendar.isDateInToday(foodDate), initialMode: mode, startingFood: startingFood)
                     .tallySheet()
             }
+            .environmentObject(feedback)
             .environment(\.calendar, calendar)
+            .task { cleanUpFoods() }
+            .alert("Food Cleanup Failed", isPresented: Binding(get: { cleanupError != nil }, set: { if !$0 { cleanupError = nil } })) {
+                Button("OK", role: .cancel) { }
+            } message: { Text(cleanupError ?? "") }
             .onChange(of: selectedTab) { _, tab in
-                if tab == .today { selectedDate = Date() }
+                if tab == .today { todayDate = Date() }
             }
             .onChange(of: selectedDate) { _, date in
                 followsToday = calendar.isDateInToday(date)
             }
             .onChange(of: scenePhase) { _, phase in
-                if phase == .active { refreshDay() }
+                if phase == .active { refreshDay(); cleanUpFoods() }
             }
             .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in refreshDay() }
             .onReceive(NotificationCenter.default.publisher(for: .NSSystemTimeZoneDidChange)) { _ in refreshDay() }
     }
 
+    private func cleanUpFoods() {
+        do { try FoodStore(container: modelContext.container).removeExpired() }
+        catch { cleanupError = "Unused scanned foods could not be removed. " + error.localizedDescription }
+    }
+
     private var foodDate: Date {
-        selectedTab == .today || selectedTab == .diary ? selectedDate : Date()
+        selectedTab == .diary ? selectedDate : Date()
     }
 
     private func refreshDay() {
+        todayDate = Date()
         let updatedCalendar = Calendar.current
         if followsToday {
             selectedDate = Date()
@@ -149,7 +173,12 @@ private struct AddFoodMenu: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let date: Date
+    let onRecent: (Food) -> Void
     let onSelect: (FoodEntryMode) -> Void
+    @Query(sort: \MacroEntry.date, order: .reverse) private var entries: [MacroEntry]
+    @Query private var savedFoods: [SavedFood]
+
+    private var recentFoods: [Food] { LocalFoodLibrary.recent(entries: entries, saved: savedFoods) }
 
     var body: some View {
         ScrollView {
@@ -169,12 +198,30 @@ private struct AddFoodMenu: View {
                     .foregroundStyle(.secondary)
                     .accessibilityLabel("Close add food menu")
                 }
-                option(.search, title: "Search foods", subtitle: "Find a food by name or brand", icon: "magnifyingglass", prominent: true)
+                if !recentFoods.isEmpty {
+                    TallySectionLabel(text: "Recent foods")
+                    VStack(spacing: 0) {
+                        ForEach(recentFoods) { food in
+                            Button { onRecent(food) } label: {
+                                HStack(spacing: 12) {
+                                    Text(food.cartoonIcon).accessibilityHidden(true)
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(food.name).font(.subheadline.weight(.semibold))
+                                        Text(food.subtitle).font(.caption).foregroundStyle(.secondary)
+                                    }
+                                    Spacer(minLength: 8)
+                                    Image(systemName: "chevron.right").font(.caption.weight(.semibold))
+                                }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
+                            }.buttonStyle(TallyPressStyle()).foregroundStyle(MacroTheme.text)
+                        }
+                    }.tallyPanel()
+                }
+                option(.search, title: "Search foods", subtitle: "Search foods stored on your phone", icon: "magnifyingglass", prominent: true)
                 option(.barcode, title: "Scan a barcode", subtitle: "Use the nutrition on your package", icon: "barcode.viewfinder", prominent: false)
             }
             .padding(24)
         }
-        .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.height(350), .large])
+        .presentationDetents(dynamicTypeSize.isAccessibilitySize || !recentFoods.isEmpty ? [.large] : [.height(350), .large])
     }
 
     private func option(_ mode: FoodEntryMode, title: String, subtitle: String, icon: String, prominent: Bool) -> some View {
@@ -203,8 +250,11 @@ private struct AddFoodMenu: View {
 }
 
 private struct DiaryDayView: View {
+    @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @EnvironmentObject private var feedback: TallyFeedback
+    @Environment(\.calendar) private var calendar
     @ScaledMetric(relativeTo: .body) private var contentSpacing = 20
 
     @Environment(\.modelContext) private var modelContext
@@ -222,8 +272,6 @@ private struct DiaryDayView: View {
     @State private var saveError: String?
     @State private var entryToEdit: MacroEntry? = nil
     @State private var isShowingDatePickerSheet: Bool = false
-    @State private var entryToDelete: MacroEntry? = nil
-    @State private var isShowingDeleteConfirmation: Bool = false
     
     private var activeGoal: MacroGoal {
         goals.first ?? MacroGoal()
@@ -246,6 +294,15 @@ private struct DiaryDayView: View {
                             macroCardsGrid(totals: totals)
                         }
                     }
+                    NavigationLink {
+                        NutrientDetailsView(entries: dayEntries)
+                    } label: {
+                        HStack {
+                            Label("Vitamins, minerals & more", systemImage: "leaf")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                        }.font(.subheadline.weight(.medium)).foregroundStyle(.secondary).padding(.vertical, 12)
+                    }
                     dailyHistorySection
                 }
                 .frame(maxWidth: 640)
@@ -263,27 +320,6 @@ private struct DiaryDayView: View {
             .sheet(isPresented: $isShowingDatePickerSheet) {
                 datePickerSheet
             }
-            .confirmationDialog(
-                "Delete Entry",
-                isPresented: $isShowingDeleteConfirmation,
-                titleVisibility: .visible
-            ) {
-                Button("Delete", role: .destructive) {
-                    if let entry = entryToDelete {
-                        withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 1)) {
-                            modelContext.delete(entry)
-                            do { try modelContext.save() }
-                            catch { modelContext.rollback(); saveError = error.localizedDescription }
-                        }
-                    }
-                    entryToDelete = nil
-                }
-                Button("Cancel", role: .cancel) {
-                    entryToDelete = nil
-                }
-            } message: {
-                Text("Are you sure you want to delete this macro entry?")
-            }
             .alert("Could Not Save", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
                 Button("OK", role: .cancel) {}
             } message: { Text(saveError ?? "") }
@@ -296,37 +332,55 @@ private struct DiaryDayView: View {
     // MARK: - Subviews
     
     private var dateNavigator: some View {
-        VStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Button { changeDay(by: -1) } label: {
-                    Image(systemName: "chevron.left").frame(width: 44, height: 44)
+                if showsOverview {
+                    Text(selectedDate.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()))
+                        .font(.subheadline).foregroundStyle(.secondary)
+                    Spacer()
+                    Text("Daily overview").font(.caption.weight(.medium)).foregroundStyle(.secondary)
+                } else {
+                    Button { changeDay(by: -7) } label: {
+                        Image(systemName: "chevron.left").frame(width: 44, height: 44)
+                    }.accessibilityLabel("Previous week")
+                    Spacer(minLength: 0)
+                    Button { isShowingDatePickerSheet = true } label: {
+                        Label(selectedDate.formatted(.dateTime.month(.wide).year()), systemImage: "calendar")
+                            .font(.subheadline.weight(.semibold)).frame(minHeight: 44)
+                    }.accessibilityLabel("Choose date")
+                    Spacer(minLength: 0)
+                    Button { changeDay(by: 7) } label: {
+                        Image(systemName: "chevron.right").frame(width: 44, height: 44)
+                    }.accessibilityLabel("Next week")
                 }
-                .accessibilityLabel("Previous day")
-                Spacer(minLength: 4)
-                Button { isShowingDatePickerSheet = true } label: {
-                    VStack(spacing: 4) {
-                        Text(formattedSelectedDate).font(.headline)
-                        Text(selectedDate.formatted(.dateTime.month(.wide).day().year()))
-                            .font(MacroTheme.labelFont).foregroundStyle(MacroTheme.muted)
+            }
+            if !showsOverview {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 4) {
+                        ForEach(DiaryDates.week(containing: selectedDate, calendar: calendar), id: \.self) { day in
+                            Button { selectedDate = day } label: {
+                                VStack(spacing: 8) {
+                                    Text(day.formatted(.dateTime.weekday(.narrow))).font(.caption)
+                                    Text(day.formatted(.dateTime.day())).font(.headline)
+                                }
+                                .frame(minWidth: 40, minHeight: 64).padding(.horizontal, 2)
+                                .foregroundStyle(calendar.isDate(day, inSameDayAs: selectedDate) ? .white : MacroTheme.text)
+                                .background(calendar.isDate(day, inSameDayAs: selectedDate) ? MacroTheme.accent : .clear, in: RoundedRectangle(cornerRadius: 16))
+                            }
+                            .accessibilityLabel(day.formatted(date: .complete, time: .omitted))
+                            .accessibilityAddTraits(calendar.isDate(day, inSameDayAs: selectedDate) ? [.isSelected] : [])
+                        }
+                    }.frame(minWidth: 0, maxWidth: .infinity)
+                }
+                HStack {
+                    Text(formattedSelectedDate).font(.headline)
+                    Spacer()
+                    if !isSelectedDateToday {
+                        Button("Today") { selectedDate = Date() }.frame(minHeight: 44)
                     }
-                    .frame(minHeight: 44)
                 }
-                .accessibilityLabel("Choose date, \(formattedSelectedDate)")
-                Spacer(minLength: 4)
-                Button { changeDay(by: 1) } label: {
-                    Image(systemName: "chevron.right").frame(width: 44, height: 44)
-                }
-                .accessibilityLabel("Next day")
             }
-            .buttonStyle(TallyPressStyle())
-            if !isSelectedDateToday {
-                Button("Return to today") { selectedDate = Date() }
-                    .font(MacroTheme.labelFont).frame(minHeight: 44)
-                    .buttonStyle(TallyPressStyle())
-            }
-        }
-        .padding(8)
-        .tallyPanel()
+        }.buttonStyle(TallyPressStyle())
     }
 
     private func energyDashboardCard(totalCalories: Double) -> some View {
@@ -361,7 +415,11 @@ private struct DiaryDayView: View {
                 icon: "drop.fill"
             )
         }
-        .tallyPanel()
+        .background(MacroTheme.surface.opacity(contrast == .increased ? 1 : 0.55), in: RoundedRectangle(cornerRadius: 18))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18)
+                .strokeBorder(contrast == .increased ? MacroTheme.text.opacity(0.5) : .clear, lineWidth: 1)
+        }
     }
     
     private var dailyHistorySection: some View {
@@ -383,8 +441,21 @@ private struct DiaryDayView: View {
                 emptyDayView
             } else {
                 LazyVStack(spacing: 10) {
-                    ForEach(dayEntries) { entry in
-                        entryRow(entry)
+                    if showsOverview {
+                        ForEach(dayEntries) { entry in entryRow(entry) }
+                    } else {
+                        ForEach(DiaryPeriod.allCases) { period in
+                            let entries = dayEntries.filter { DiaryPeriod.period(for: $0.date, calendar: calendar) == period }
+                            if !entries.isEmpty {
+                                HStack {
+                                    Text(period.rawValue).font(.subheadline.weight(.semibold))
+                                    Spacer()
+                                    Text("\(MacroTheme.formatCalories(DiaryTotals(entries: entries).calories)) kcal")
+                                        .font(.caption).foregroundStyle(.secondary)
+                                }.padding(.top, 12).accessibilityAddTraits(.isHeader)
+                                ForEach(entries) { entry in entryRow(entry) }
+                            }
+                        }
                     }
                 }
             }
@@ -397,9 +468,26 @@ private struct DiaryDayView: View {
                 entryToEdit = entry
             } label: {
                 VStack(alignment: .leading, spacing: 8) {
-                    if dynamicTypeSize.isAccessibilitySize {
+                    if !showsOverview {
+                        ViewThatFits(in: .horizontal) {
+                            HStack {
+                                Text(entry.displayName).font(.headline)
+                                Spacer()
+                                Text("\(MacroTheme.formatCalories(entry.calories)) kcal").font(.subheadline.weight(.semibold))
+                            }
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(entry.displayName).font(.headline)
+                                Text("\(MacroTheme.formatCalories(entry.calories)) kcal").font(.subheadline.weight(.semibold))
+                            }
+                        }
+                        Text([entry.portionDescription, entry.date.formatted(date: .omitted, time: .shortened)].compactMap { $0 }.joined(separator: " · "))
+                            .font(.caption).foregroundStyle(.secondary)
+                    } else if dynamicTypeSize.isAccessibilitySize {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(entry.displayName).font(.headline)
+                            HStack(spacing: 8) {
+                                Text(FoodEmoji.forName(entry.displayName)).accessibilityHidden(true)
+                                Text(entry.displayName).font(.headline)
+                            }
                             Text("\(MacroTheme.formatCalories(entry.calories)) kcal").font(.subheadline.weight(.semibold))
                         }
                         Text(entry.date.formatted(date: .omitted, time: .shortened)).font(.caption)
@@ -410,7 +498,10 @@ private struct DiaryDayView: View {
                         }
                     } else {
                         HStack {
-                            Text(entry.displayName).font(.headline)
+                            HStack(spacing: 8) {
+                                Text(FoodEmoji.forName(entry.displayName)).accessibilityHidden(true)
+                                Text(entry.displayName).font(.headline)
+                            }
                             Spacer()
                             Text("\(MacroTheme.formatCalories(entry.calories)) kcal").font(.subheadline.weight(.semibold))
                         }
@@ -435,8 +526,7 @@ private struct DiaryDayView: View {
                 }
                 
                 Button(role: .destructive) {
-                    entryToDelete = entry
-                    isShowingDeleteConfirmation = true
+                    deleteEntry(entry)
                 } label: {
                     Label("Delete", systemImage: "trash")
                 }
@@ -458,8 +548,7 @@ private struct DiaryDayView: View {
             }
             
             Button(role: .destructive) {
-                entryToDelete = entry
-                isShowingDeleteConfirmation = true
+                deleteEntry(entry)
             } label: {
                 Label("Delete Entry", systemImage: "trash")
             }
@@ -527,6 +616,11 @@ private struct DiaryDayView: View {
         }
     }
     
+    private func deleteEntry(_ entry: MacroEntry) {
+        do { try feedback.delete(entry, in: modelContext) }
+        catch { saveError = error.localizedDescription }
+    }
+
     private func changeDay(by delta: Int) {
         if let newDate = Calendar.current.date(byAdding: .day, value: delta, to: selectedDate) {
             withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 1)) {

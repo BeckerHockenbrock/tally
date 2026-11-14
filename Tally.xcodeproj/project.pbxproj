@@ -40,6 +40,10 @@
 		EECDC717309D397F0007B33C /* BarcodeScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EECDC716309D397F0007B33C /* BarcodeScannerView.swift */; };
 		EECDC719309D39B90007B33C /* FoodDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EECDC718309D39B90007B33C /* FoodDetailView.swift */; };
 		EECDC71B309D39B90007B33C /* FoodEntryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EECDC71A309D39B90007B33C /* FoodEntryView.swift */; };
+		AF1000000000000000000001 = {isa = PBXBuildFile; fileRef = AF2000000000000000000001; };
+		AF1000000000000000000002 = {isa = PBXBuildFile; fileRef = AF2000000000000000000002; };
+		AF1000000000000000000003 = {isa = PBXBuildFile; fileRef = AF2000000000000000000003; };
+		AF1000000000000000000004 = {isa = PBXBuildFile; fileRef = AF2000000000000000000004; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -60,6 +64,10 @@
 		EECDC718309D39B90007B33C /* FoodDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoodDetailView.swift; sourceTree = "<group>"; };
 		EECDC71A309D39B90007B33C /* FoodEntryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoodEntryView.swift; sourceTree = "<group>"; };
 		EECDC720309D39EA0007B33C /* TallyTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TallyTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		AF2000000000000000000001 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Nutrition.swift; sourceTree = "<group>"; };
+		AF2000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalFoodLibrary.swift; sourceTree = "<group>"; };
+		AF2000000000000000000003 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NutrientViews.swift; sourceTree = "<group>"; };
+		AF2000000000000000000004 = {isa = PBXFileReference; lastKnownFileType = text.json; path = CommonFoods.json; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -97,6 +105,10 @@
 		A30000000000000000000002 /* Tally */ = {
 			isa = PBXGroup;
 			children = (
+                AF2000000000000000000004,
+                AF2000000000000000000003,
+                AF2000000000000000000002,
+                AF2000000000000000000001,
 				A20000000000000000000001 /* TallyApp.swift */,
 				A20000000000000000000002 /* ContentView.swift */,
 				EECDC704309CF0D10007B33C /* MacroEntry.swift */,
@@ -209,6 +221,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+                AF1000000000000000000004,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -227,6 +240,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+                AF1000000000000000000003,
+                AF1000000000000000000002,
+                AF1000000000000000000001,
 				EECDC717309D397F0007B33C /* BarcodeScannerView.swift in Sources */,
 				EECDC70F309CF10C0007B33C /* MacroProgressViews.swift in Sources */,
 				A10000000000000000000001 /* TallyApp.swift in Sources */,
